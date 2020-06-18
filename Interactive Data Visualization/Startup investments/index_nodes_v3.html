@@ -1,0 +1,328 @@
+<html>
+  <head>
+    <style>
+
+node {
+  opacity: 0.5;
+stroke: 'black';
+    stroke-width: 0.5;
+}
+
+node:hover {
+  opacity: 0.3;
+}
+
+links line {
+  stroke: #999;
+  stroke-opacity: 0.5;
+}
+                
+text {
+  font-family: sans-serif;
+  font-size: 10px;
+}
+        
+div.tooltip {   
+ 	position: absolute;  
+    z-index: 10;
+	text-align: center;           
+	width: 60px;                  
+	height: 28px;                 
+	padding: 2px;             
+	font: 12px sans-serif;        
+	background: white;   
+	border: 0px;      
+	border-radius: 8px;           
+	pointer-events: none;         
+}
+    
+tr:nth-of-type(odd) { 
+		background: #a3c2c2; 
+	}
+	th { 
+		background: #293d3d ; 
+		color: white; 
+		font-weight: bold; 
+		cursor: s-resize;
+		background-repeat: no-repeat;
+        background-position: 3% center;
+	}
+	td, th { 
+		padding: 6px; 
+		border: 1px solid  #ccc; 
+		text-align: left; 
+        font: 12px sans-serif;  
+	}
+        
+     
+	
+
+    </style>
+    <script src="https://d3js.org/d3.v4.min.js"></script>      
+      <script src="https://d3js.org/d3-selection-multi.v1.js"></script>
+      <script src="https://unpkg.com/d3-simple-slider"></script>
+      <script src="https://d3js.org/d3-scale-chromatic.v1.js"></script>
+  </head>
+  <body>
+        <div class='col' style="width:6%; height:100%; margin-top:100px; margin-left:10px; float:left">
+          <div id="slider-vertical" style='height:500px' ></div></div>
+ <div class='col' style="height:100%; float:left;">
+<div class='row' style="height:89%";>
+<h2 style='margin-top:20px' align='center'>Early stage investments by stages and industry (top 15), 2012-2019</h2>
+    
+        <div id="viz" style="margin-top:10px"></div>
+     
+     </div>
+     
+     
+    <div class='row' style="margin-left:20px; margin-bottom: 10px; height:10%;">
+      <text style='font: 12px sans-serif; color:dimgrey'>Source: crunchbase.com (all investments >0.5M USD). Most companies have multi industries tags, therefore, the industries overlap. </text>
+           </div>
+      </div>
+       <div class='col' style="height:100%; float:left;">
+           <div id="legend" ></div>
+           
+      </div>
+    
+      
+<div class='col' style="width:25%; height:100%; float:right; background-color:  #f0f5f5">
+    <center id='message' style='margin-top: 20px; font: 20px sans-serif; color:grey'>Click the industry to get <br> info on companies</center>
+     <div id="info_table" style='position:relative; top:20px; left:30px'></div>
+    </div>
+      
+    <script>
+        
+var color_domain=['Medical',
+ 'E-Commerce',
+ 'Finance',
+ 'IT',
+ 'Transportation',
+ 'AI & Big Data',
+ 'Energy & Resources',
+ 'Insurance',
+ 'Other'];
+        
+var stage_names=['Seed', 'Series A, B', 'Series C', 'Private Equity', 'Late Stage']
+        
+var color_group = d3.scaleOrdinal()
+.domain(color_domain)
+.range(d3.schemeCategory10);    
+         
+        
+//function colorByGroup(d) { return color(group(d)); }
+
+var width = 850,
+    width_legend=150;
+    width_s = 160,
+    height = 550,
+    margin_left=30,
+    margin_bottom=40;
+
+       
+var svg = d3.select('#viz')
+    .append('svg')
+    .attr('width', width)
+    .attr('height', height);
+        
+        
+var tooltip = d3.select("body")
+    .append("div")
+    .style("position", "absolute")
+    .style("z-index", "10")
+    .style("visibility", "hidden")
+    .style("color", "white")
+    .style("padding", "8px")
+    .style("background-color", "rgba(0, 0, 0, 0.75)")
+    .style("border-radius", "6px")
+    .style("font", "12px sans-serif")
+    .text("tooltip"); 
+    
+        
+var years=d3.range(8).map(function(d) {    
+    return 2012 + d;
+  });        
+
+//var clicked=0;
+
+var sliderVertical = d3
+    .sliderLeft()  
+    .min(2012)
+    .max(2019)
+    .step(1)
+    .tickFormat(d3.format(".0f"))
+    .height(300) 
+    .tickValues(years)
+    .default(2012)    
+    .on('onchange', function() {
+      updateChart(sliderVertical.value());
+        
+    });
+
+  var gVertical = d3
+    .select('div#slider-vertical')
+    .append('svg')
+    .attr('width', 80)
+    .attr('height', 450)
+    .append('g')
+    .attr('transform', 'translate(60,20)');
+
+  gVertical.call(sliderVertical);
+        
+var dataset;
+
+var node, link;
+
+var simulation;
+        
+d3.json('top_industries.json', function(err, data) {        
+        
+    dataset=data;
+    updateChart(2012)    
+    });
+        
+    
+function updateChart(year){
+      
+//console.log('dataset', dataset_year.nodes)
+    
+    
+
+for (var s=0; s<5; s++){
+    var k=5;
+//flat the dataset
+    dataset_year=[]
+    for (var s=0; s<5; s++){
+        var total=0
+        for (var i=0; i<dataset[year][s]['order'].length; i++){ 
+            for (var j=0; j<dataset[year][s]['order'][i]['industry'].length; j++){ 
+                total=total+2*dataset[year][s]['order'][i]['industry'][j]['radius']/k
+                dataset[year][s]['order'][i]['industry'][j]['total']=total
+                dataset_year.push(dataset[year][s]['order'][i]['industry'][j])};
+            if (j>0) {total=total+8};
+             };        
+    };
+    
+    svg.selectAll("g").remove();
+    
+    var node = svg
+    .selectAll("g")
+    .data(dataset_year);
+    
+    nodeEnter=node    
+    .enter()
+    .append("g")
+    
+    
+    var circles=nodeEnter.append("circle")
+        .attr("cx", function(d, stage){return margin_left+d.stage*width_s;})
+        .attr("cy", function(d, i){return height-margin_bottom-d.total+d.radius/k})
+          .attr("r", function(d) { return d.radius/k;})
+          .attr("fill", function(d) {return color_group(d.group)})
+          .attr('stroke', 'black')
+        .attr('opacity', 0.8)
+            .style("stroke-width", 0.5)
+        .on("click", function(d) { 
+         //   clicked=1
+         show_companies(d.companies)
+            console.log(d.companies)
+        });        
+
+ 
+  nodeEnter.append("text")
+      .text(function(d) {if (d.radius>15) {return d.name;};})
+      .attr("x", function(d, stage){return margin_left+d.stage*width_s+d.radius/k+3;})
+        .attr('y', function(d, i){return height-margin_bottom-d.total+d.radius/k+4})
+};
+};
+        
+var labels=svg.selectAll('label')
+            .data(stage_names)
+            .enter()
+            .append('text')
+            .attr('x', function(d, i){return margin_left+i*width_s-10}) 
+            .attr('y', height-7) 
+            .text(function(d) {return d;})
+            .style("font", "14px sans-serif");
+ 
+
+ var legend = d3.select('#legend')
+     .append('svg')
+    .attr('width', width_legend)
+    .attr('height', height)
+    .selectAll("g")
+    .data(color_domain);
+    
+    legendEnter=legend   
+    .enter()
+    .append("g")
+    
+    
+    var circles_legend=legendEnter.append("circle")
+        .attr("cx", 10)
+        .attr("cy", function(d, i){return 250-i*16})
+          .attr("r", function(d) { return 6;})
+          .attr("fill", function(d) {return color_group(d)})
+       //   .attr('stroke', 'black')
+        .attr('opacity', 0.8)
+            .style("stroke-width", 0.5);       
+        
+         legendEnter.append("text")
+      .text(function(d) {return d;})
+      .attr("x", 25)
+        .attr('y', function(d, i){return 250-i*16+2})
+        .style("font", "12px sans-serif");
+        
+var table = d3.select("#info_table").append("table") //define table outside the function, otherwise new table is created each time
+  thead = table.append("thead").append("tr"),
+  tbody = table.append("tbody");
+    
+function show_companies(companies_list){
+   //     if (clicked==1) {}
+    d3.select('#message').remove()
+       
+    companies_list=companies_list.slice(0,15)
+     var header= thead.selectAll("th")
+                .data(["Company", 'M USD', "Investors"])
+                .enter()
+                .append("th")
+                .attr("align", "left")
+                .text(function(d) { return d; }) //
+                .style("font-family", "sans-serif")
+                 .attr("font-size", "14px")
+
+     ;         
+    
+    tbody.selectAll("tr").remove();
+    
+    var rows = tbody.selectAll("tr")
+             //   .data(companies_listv).enter().append("tr"); 
+    .data(companies_list).enter().append("tr"); 
+    
+    rows.on('mouseover', function(d) {   
+                    tooltip.text(d.descr);   
+                    tooltip.style("visibility", "visible")
+                    .style("left", (d3.event.pageX) + "px")
+                     .style("top", (d3.event.pageY+10) + "px");
+                })
+     .on("mouseout", function(){
+            tooltip.style("visibility", "hidden");    
+        });
+    
+    var cells=rows.selectAll("td").data(function(d) {
+                    return [d.company, d3.format(".1f")(d.value), d.investors];
+                })
+                .enter()
+                .append("td")
+                .attr("align", "left")                
+                .text(function(d) {
+                    return d;
+                })
+            //    .style("font-family", "sans-serif")
+            //     .attr("font-size", "10px")
+                ;
+    ;
+};
+
+    </script>
+  </body>
+</html>

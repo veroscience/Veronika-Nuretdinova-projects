@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+	<meta charset="utf-8" http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>...</title>
+
+    <script src="https://d3js.org/d3.v4.min.js"></script> 
+	<script src="https://d3js.org/queue.v1.min.js"></script>
+	<script src="https://d3js.org/topojson.v1.min.js"></script>
+    <script src="https://d3js.org/d3-scale-chromatic.v1.js"></script>
+    <script src="https://unpkg.com/d3-simple-slider"></script>
+    <script src = "https://d3js.org/d3-dsv.v1.min.js"></script>    
+
+</head>
+
+<body>
+    
+    <div class=”col” style="width:900px; float:left;">
+<h2 style='margin-top:20px' align='center'> Fuels tradeflows, 2001-2018, bn USD </h2>
+        <div class='col'  style="width:150px; float:left; margin-bottom: 10px">
+        <text style='top-margin:10px; top-left:10px; font: 14px sans-serif;'>Import country</text>
+        <div id='dropdown_imp' style="width: 100px; top-margin:10px; top-left:20px" ></div>
+        </div>
+        <div class='col'  style="width:150px; float:left; margin-bottom: 10px">
+        <text style='top-margin:10px; top-left:10px; font: 14px sans-serif;'>Export country</text>
+        <div id='dropdown_exp' style="width: 100px; float:left; top-margin:10px; top-left:20px" ></div>
+        </div>
+<div id="chart" style="width: 1000px;"> </div>  
+
+        <div id="slider-year" style="top-margin:10px; top-left:20px"> </div>   
+
+        
+    
+    <text style='top-margin:10px; top-left:10px; font: 12px sans-serif;'>Source: ITC "International trade in goods", 2018 http://www.intracen.org/itc/market-info-tools/trade-statistics/ </text>
+        
+        
+    </div>
+    
+<div class=”col” style="width:100px; float:left; margin-top:130px; align-content: center;"> 
+    <div id='slider_title'></div>
+    <div id="slider-vertical"></div>
+</div>   
+    
+<div class='col' style="width:220px; float:left; margin-top:80px; align-content: center;"> 
+    <p style="font: 16px sans-serif"  align='center'>Top exporters, bn USD</p> 
+    <div id='bar_export'></div></div>
+    
+<div class='col' style="width:220px; float:left; margin-top:80px; align-content: center;"> 
+    <p style="font: 16px sans-serif"  align='center'>Top importers, bn USD</p> 
+    <div id='bar_import'></div>
+    </div>
+<style>
+
+.arc {
+	  pointer-events: auto;
+	  fill: none;
+	}
+    
+
+
+/* Style for Custom Tooltip */
+div.tooltip {   
+ 	position: absolute;  
+    z-index: 10;
+	text-align: center;           
+	width: 30px;                  
+	height: 28px;                 
+	padding: 2px;             
+	font: 14px sans-serif;        
+	background: white;   
+	border: 0px;      
+	border-radius: 8px;           
+	pointer-events: none;         
+}
+    
+    
+    </style>
+    
+<script>
+
+    
+//http://bl.ocks.org/mhkeller/f41cceac3e7ed969eaeb
+//https://observablehq.com/@mbostock/mobile-patent-suits
+//http://bl.ocks.o/micahstubbs/8e15870eb432a21f0bc4d3d527b2d14f
+var dataLat={};
+var dataLong={};
+var dataCountry={};
+var intracen={};
+var json={};
+var data;
+    
+var width=900;
+var height=500;
+
+var svg = d3.select("#chart")
+			.append("svg")
+			.attr("width", width)
+			.attr("height", height);
+    
+var projection = d3.geoMercator()
+    .translate([width/2-55, height/2+100])    // translate to center of screen
+				   .scale([200]);
+    
+var path = d3.geoPath()
+          .projection(projection); 
+    
+var colorScale = d3.scaleOrdinal(d3.schemeCategory20);
+    
+
+// Handler for dropdown value change
+var importers=["All",                
+       'Belgium',
+ 'Canada',
+ 'China',
+ 'France',
+ 'Germany',
+ 'India',
+ 'Indonesia',
+ 'Italy',
+ 'Japan',
+ 'Malaysia',
+ 'Mexico',
+ 'Netherlands',
+ 'Singapore',
+ 'South Korea',
+ 'Spain',
+ 'Taipei',
+ 'Thailand',
+ 'Turkey',
+ 'USA',
+ 'United Kingdom'
+]
+
+var exporters=['All', 'Algeria',
+ 'Australia',
+ 'Canada',
+ 'China',
+ 'Indonesia',
+ 'Iran',
+ 'Kuwait',
+ 'Malaysia',
+ 'Mexico',
+ 'Netherlands',
+ 'Nigeria',
+ 'Norway',
+ 'Oman',
+ 'Qatar',
+ 'Russia',
+ 'Saudi Arabia',
+ 'Singapore',
+  'UAE',
+ 'USA',
+ 'United Kingdom',
+ 'Venezuela']
+
+var target_selected='All';
+var source_selected='All';
+    
+var dropdown_imp = d3.select("#dropdown_imp")
+                    .insert("select", "svg")
+                    .selectAll("option")
+                    .data(importers)
+                    .enter().append("option")
+                    .text(function (d) { return d; }) // text showed in the menu
+                    .attr("value", function (d) { return d; }); 
+                    
+                    d3.select("#dropdown_imp").on("change", function(d) {
+                       
+                        target_selected=d3.select('#dropdown_imp option:checked').text()
+                        update_chart(target_selected, source_selected)
+                    });
+    
+var dropdown_exp = d3.select("#dropdown_exp")
+                    .insert("select", "svg")
+                    .selectAll("option")
+                    .data(exporters)
+                    .enter().append("option")
+                    .text(function (d) { return d; }) // text showed in the menu
+                    .attr("value", function (d) { return d; }); 
+                    
+                    d3.select("#dropdown_exp").on("change", function(d) {
+                       
+                        source_selected=d3.select('#dropdown_exp option:checked').text()
+                        update_chart(target_selected, source_selected)
+                    });
+    
+/// bar chart
+    
+var y = d3.scaleLinear()
+    .domain([0, 100])
+    .range([250, 0 ]);
+
+//tooltips
+var tooltip = d3.select("#chart")
+     .append('div')
+    .style("position", "absolute")
+    .style("z-index", "10")
+    .style("visibility", "hidden")
+    .style("color", "white")
+    .style("padding", "8px")
+    .style("background-color", "rgba(0, 0, 0, 0.75)")
+    .style("border-radius", "6px")
+    .style("font", "12px sans-serif")
+    .text("tooltip");       
+
+
+    
+// Append Div for tooltip to SVG
+var div = d3.select("#chart")
+		    .append("div")   
+    		.attr("class", "tooltip")               
+    		.style("opacity", 0);
+
+
+var clicked_slider=0
+    
+var sliderVertical = d3
+    .sliderLeft()  
+    .min(1)
+     .max(150)
+    .height(250)    
+    .ticks(5)
+    .default([20,150])    
+    .on('onchange', function() {
+      update_chart(target_selected, source_selected);
+        
+        clicked_slider=1;
+        slider_title
+           .html(d3.format(".0f")(sliderVertical.value()[0])+" - " +d3.format(".0f")(sliderVertical.value()[1])+"<tspan x=19 y=40> bn USD </tspan>")
+    });
+
+  var gVertical = d3
+    .select('div#slider-vertical')
+    .append('svg')
+    .attr('width', 100)
+    .attr('height', 300)
+    .append('g')
+    .attr('transform', 'translate(60,30)')
+  .on("mouseover", function()
+   {if (clicked_slider==0)
+     {tooltip.text("Choose the tradeflow range (20-600 b USD)");
+     tooltip.style("visibility", "visible")            
+    .style("left", (d3.event.pageX-50) + "px")
+	 .style("top", (d3.event.pageY -50) + "px");
+    ;
+    }
+   })
+    .on("mouseout", function(){
+            tooltip.style("visibility", "hidden");    
+        });
+
+  gVertical.call(sliderVertical);    
+    
+    
+var slider_title=d3.select("#slider_title")
+    .append('svg')
+    .attr('width', 100)
+    .attr('height', 40)
+    .append("text")
+    .attr('x', 20)
+    .attr('y', 25)
+    .style("font", "12px sans-serif")
+    .style("fill", "dimgrey")
+    .html(d3.format(".0f")(sliderVertical.value()[0])+" - " +d3.format(".0f")(sliderVertical.value()[1])+"<tspan x=19 y=40> bn USD </tspan>")
+
+//slider in the bottom
+
+var years=d3.range(18).map(function(d) {    
+    return 2001 + d;
+  }); 
+
+  var sliderTime = d3
+    .sliderBottom()
+    .min(2001)
+    .max(2018)
+    .step(1)
+    .width(600)
+    .tickFormat(d3.format(".0f"))
+    .tickValues(years)
+    .default(2018)
+    .on('onchange', function() {
+      update_chart(target_selected, source_selected);
+        update_bar_chart(sliderTime.value());
+        clicked_slider=1;
+    });
+
+  var gTime = d3
+    .select('div#slider-year')
+    .append('svg')
+    .attr('width', 700)
+    .attr('height', 100)
+    .append('g')
+    .attr('transform', 'translate(30,30)');
+
+  gTime.call(sliderTime);
+
+var export_data;
+var import_data;   
+    
+ d3.json("exporters_json.json", function(json) {
+        export_data=json;
+        console.log('export', export_data)   
+});
+    
+    d3.json("importers_json.json", function(json) {
+        import_data=json;
+        update_bar_chart(sliderTime.value());  
+});    
+  
+    
+     
+  
+//the bar charts
+    
+var bar_margin = {
+            top: 5,
+            right: 15,
+            bottom: 15,
+            left: 75
+};
+
+var bar_width = 220 - bar_margin.left - bar_margin.right,
+            bar_height = 500 - bar_margin.top - bar_margin.bottom;
+
+var svg_export = d3.select("#bar_export").append("svg")
+            .attr("width", 220)
+            .attr("height", 500)
+            .append("g")
+            .attr("transform", "translate(" + bar_margin.left + "," + bar_margin.top + ")");
+    
+var svg_import = d3.select("#bar_import").append("svg")
+            .attr("width", 220)
+            .attr("height", 500)
+            .append("g")
+            .attr("transform", "translate(" + bar_margin.left + "," + bar_margin.top + ")");
+
+function update_bar_chart(year)
+{
+    //export chart
+    var y_exp = d3.scaleBand()
+          .range([0, bar_height])
+          .padding(0.1)
+            .domain(export_data[year].map(function(d) { return d.country; }));
+
+        var x_exp = d3.scaleLinear()
+          .range([0, bar_width])
+        .domain([0, d3.max(export_data[year], function(d) { return d.value; })/10**6]);  
+    
+                 
+  // append the rectangles for the bar chart
+ var export_bar= svg_export.selectAll(".bar")
+      .data(export_data[year]); 
+    
+    export_bar.exit().remove();
+    
+    export_bar
+    .enter().append("rect").merge(export_bar)
+      .attr("class", "bar")
+      .attr("width", function(d) {return x_exp(d.value/10**6); } )
+      .attr("y", function(d, i) { return y_exp(d.country); })
+      .attr("height", y_exp.bandwidth())
+    .style("fill", '#d1e0e0')
+    .style("font", "12px sans-serif");
+    
+    
+    
+var export_text= svg_export.selectAll(".text")
+      .data(export_data[year]);   
+    
+    svg_export.selectAll("text").remove();
+    
+    export_text
+    .enter().append("text")
+        .attr("x", function(d) {return x_exp(d.value/10**6)/2; })
+          .attr("y", function(d, i) { return y_exp(d.country)+15; })
+      //    .attr("dy", ".35em")
+          .text(function(d, i) {return d3.format(".0f")(d.value/10**6); })
+        .style("font", "10px sans-serif");
+            
+   
+
+  // add the x Axis    
+  svg_export.append("g")
+      .attr("transform", "translate(0," + height + ")")
+      .call(d3.axisBottom(x_exp));
+
+  // add the y Axis
+  svg_export.append("g")
+      .call(d3.axisLeft(y_exp));
+
+//import chart
+    
+    var y_imp = d3.scaleBand()
+          .range([0, bar_height])
+          .padding(0.1)
+            .domain(import_data[year].map(function(d) { return d.country; }));
+
+        var x_imp = d3.scaleLinear()
+          .range([0, bar_width])
+        .domain([0, d3.max(import_data[year], function(d) { return d.value; })/10**6]);  
+    
+                 
+  // append the rectangles for the bar chart
+ var import_bar= svg_import.selectAll(".bar")
+      .data(import_data[year]); 
+    
+    import_bar.exit().remove();
+    
+    import_bar
+    .enter().append("rect").merge(import_bar)
+      .attr("class", "bar")
+      .attr("width", function(d) {return x_imp(d.value/10**6); } )
+      .attr("y", function(d, i) { return y_imp(d.country); })
+      .attr("height", y_imp.bandwidth())        
+    .style("fill", '#d1e0e0');
+    
+    
+    var import_text= svg_import.selectAll(".text")
+      .data(import_data[year]);   
+    
+    svg_import.selectAll("text").remove();
+    
+    import_text
+    .enter().append("text")
+        .attr("x", function(d) {return x_imp(d.value/10**6)/2; })
+          .attr("y", function(d, i) { return y_imp(d.country)+15; })
+      //    .attr("dy", ".35em")
+          .text(function(d, i) {return d3.format(".0f")(d.value/10**6); })
+        .style("font", "10px sans-serif");
+
+  // add the x Axis    
+  svg_import.append("g")
+      .attr("transform", "translate(0," + height + ")")
+      .call(d3.axisBottom(x_imp));
+
+  // add the y Axis
+  svg_import.append("g")
+      .call(d3.axisLeft(y_imp));
+    
+};
+///the main chart      
+d3.json("world-110m2.json", function(json) {
+    json=json;
+
+svg
+        .append("g")
+            .selectAll(".map")
+            .data(topojson.feature(json, json.objects.countries)
+                .features)
+            .enter()
+            .append("path")
+            .attr("d", path)
+          .style('stroke', 'black')
+        .style('stroke-width', 1.0)
+          .style ( "fill", 'lightgrey')
+          .style("opacity", 0.4) 
+   
+    ;      
+    
+});
+                  
+d3.csv("coords_1.csv", function(coords) {
+    coords.forEach(function(d) {
+        
+        dataCountry[d.id] = d.country;
+        dataLat[d.country] = d.lat;
+        dataLong[d.country] = d.long;});
+});
+    
+   
+    
+var intracen;
+    
+//var defs = svg.append('svg:defs');
+d3.json('fuel_intracen_adj.json', function(json) {       
+    intracen=json; 
+    update_chart('All', 'All')
+
+});
+    
+
+        
+function update_chart(target_selected, source_selected)
+    {
+    //   console.log("target", target_selected)
+        var year=sliderTime.value();
+        var data=[];
+        
+        //filter and flatten
+        
+       if (target_selected !="All") //filter for target
+            {
+                //year and importer
+            intracen_filtered=intracen[year].filter(function(d){return d.target == target_selected;});
+                
+            sources=intracen_filtered[0]['sources']
+                
+                if (source_selected!="All")
+                    {
+                     sources=sources.filter(function(dd) {return dd.source == source_selected;});   
+                    }
+             
+             sources=sources.filter(function(dd) {return (dd.value/10**6>sliderVertical.value()[0])&&(dd.value/10**6<sliderVertical.value()[1])});
+             
+             for (var jj=0; jj<sources.length; jj++){             
+            data.push({'target': target_selected,  'source': sources[jj]['source'], 'value': sources[jj]['value']});
+                  };
+            }
+        
+        else   //filter for source if existing
+            
+            {intracen_filtered=intracen[year]
+                          
+            for (var j=0; j<intracen_filtered.length; j++){
+                sources=intracen_filtered[j]['sources']
+                
+               // console.log('sources', sources)
+                if (source_selected!="All")
+                    {
+                     sources=sources.filter(function(dd) {return dd.source == source_selected;});   
+                    }
+        
+                //console.log('sources1', sources)
+            sources=sources.filter(function(dd) {return (dd.value/10**6>sliderVertical.value()[0])&&(dd.value/10**6<sliderVertical.value()[1])});
+             
+             for (var jj=0; jj<sources.length; jj++)
+           { data.push({'target':intracen_filtered[j]['target'], 
+                       'source': sources[jj]['source'], 'value': sources[jj]['value']});
+           };
+            
+            };
+            };
+        
+     //   console.log('data', data)
+       
+        
+      var arcs=svg.selectAll(".arc").data(data);
+        arcs.exit().remove();
+        
+        arcs
+        .enter()
+        .append("svg:path")
+        .merge(arcs)
+        .attr('d', function(d, i) {  return drawArc([d.target, d.source, 1.5])})    
+        .attr('class', 'arc')
+        .style("stroke-width", function(d, i)
+               {return d['value']/(5*10**6) })   
+    .style("stroke", function(d, i) {return colorScale(i%20)}) //divde to 20
+    .attr("marker-end", "url(#arrowhead)")
+         .on("mouseover", function(d){
+    tooltip.html(d.source+"->"+d.target+": " + d3.format(".1f")(d.value/10**6)+" bn USD");
+    
+     tooltip.style("visibility", "visible")            
+    .style("left", (d3.event.pageX) + "px")
+	 .style("top", (d3.event.pageY -30) + "px");
+    ;
+    })
+        .on("mouseout", function(d){
+            tooltip.style("visibility", "hidden");    
+        })
+         ;
+        
+        svg
+    .append('svg:defs')
+     .data(data)   
+    .enter()
+     .append('svg:marker')   
+      .attr('id', 'arrowhead')
+      .attr('markerHeight', 2)
+      .attr('markerWidth', 2)
+    //  .attr('markerUnits', 'strokeWidth')
+      .attr('orient', 'auto')
+      .attr('refX', 0)
+      .attr('refY', 0)
+      .attr('viewBox', '-5 -5 10 10')
+      .append('svg:path')
+        .attr('d', 'M 0,0 m -5,-5 L 5,0 L -5,5 Z')
+    .attr('stroke', 'black')
+    .attr('stroke-width', 0.5)
+        .attr('fill', function(d, i) {return colorScale(i)
+                                     });
+        
+    };
+    
+function drawArc([sourceName, targetName, angle]){
+		// If no bend is supplied, then do the plain square root
+		angle = angle || 1;
+    
+  //  console.log("entry", sourceName, targetName, angle, dataLong[targetName], dataLat[targetName], projection([dataLong[targetName], dataLat[targetName]]))
+    
+    var sourceXY = projection([dataLong[sourceName], dataLat[sourceName]]),
+    targetXY = projection([dataLong[targetName], dataLat[targetName]]);
+    
+
+    //      console.log("projections", sourceXY, targetXY)
+			// Uncomment this for testing, useful to see if you have any null lng/lat values
+			// if (!targetXY) console.log(d, targetLngLat, targetXY)
+			var sourceX = sourceXY[0],
+            sourceY = sourceXY[1];
+
+			var targetX = targetXY[0],
+            targetY = targetXY[1];
+
+			var dx = targetX - sourceX,
+            dy = targetY - sourceY,
+            dr = Math.sqrt(dx * dx + dy * dy)*angle;
+            
+   //      console.log("coordinates", dx, dy, dr)
+
+			// To avoid a whirlpool effect, make the bend direction consistent regardless of whether the source is east or west of the target
+		//	var west_of_source = (targetX - sourceX) < 0;
+			return "M" + targetX + "," + targetY + "A" + dr + "," + dr + " 0 0,1 " + sourceX + "," + sourceY;
+		//	return "M" + sourceX + "," + sourceY + "A" + dr + "," + dr + " 0 0,1 " + targetX + "," + targetY;   
+};
+    
+    
+
+
+    
+    
+</script>
+    
+</body>
+    
+</html>
+    

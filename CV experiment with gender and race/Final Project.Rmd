@@ -1,0 +1,71 @@
+---
+title: "Untitled"
+author: "Veronika Nuretdinova"
+date: "July 31, 2018"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+## R Markdown
+
+```{r}
+#setwd("~/Berkeley MIDS/Experiments/final project")
+cv<-read.csv("CV_data.csv", header = TRUE)
+```
+```{r}
+colnames(cv)<-c("id", "black","female", "invited","five_year")
+```
+
+### Clean the data
+```{r}
+cv<-na.omit(cv)
+```
+
+### Regression on race and female
+
+```{r}
+model=lm(invited~five_year*female, cv)
+summary(model)
+```
+
+```{r}
+power.prop.test(n = 80, p1 = 0.1, p2 = 0.2, sig.level = 0.05, power = NULL,
+            	alternative = c("one.sided"),   strict = FALSE)
+```
+```{r}
+
+```
+
+
+
+```{r}
+power.prop.test(n = 80, p1 = 0.1, p2 = 0.2, sig.level = 0.1,
+                power = NULL,
+                alternative = c("two.sided"),
+                strict = FALSE)
+```
+
+```{r}
+power.prop.test(p1=.1,p2=.2,power=.8, alternative = c("one.sided"))
+```
+
+```{r}
+power.prop.test(p1=.1,p2=.2,power=.8, alternative = c("two.sided"))
+
+```
+
+```{r}
+prop.test(c(17, 9), n=c(30, 19), alternative = 'two.sided') 
+
+#prop.test(c(18, 34), n=c(160, 160), alternative = 'two.sided') 
+```
+```{r}
+#prop.test(c(12, 13), n=c(80, 80), alternative = 'two.sided') 
+
+prop.test(c(36, 18), n=c(160, 160), alternative = 'two.sided') 
+```
+
+
+
+

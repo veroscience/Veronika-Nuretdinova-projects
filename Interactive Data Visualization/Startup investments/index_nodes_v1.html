@@ -1,0 +1,363 @@
+<html>
+  <head>
+    <style>
+
+node {
+  opacity: 0.5;
+stroke: 'black';
+    stroke-width: 0.5;
+}
+
+node:hover {
+  opacity: 0.3;
+}
+
+links line {
+  stroke: #999;
+  stroke-opacity: 0.5;
+}
+                
+text {
+  font-family: sans-serif;
+  font-size: 10px;
+}
+        
+div.tooltip {   
+ 	position: absolute;  
+    z-index: 10;
+	text-align: center;           
+	width: 60px;                  
+	height: 28px;                 
+	padding: 2px;             
+	font: 12px sans-serif;        
+	background: white;   
+	border: 0px;      
+	border-radius: 8px;           
+	pointer-events: none;         
+}
+    
+tr:nth-of-type(odd) { 
+		background: #a3c2c2; 
+	}
+	th { 
+		background: #293d3d ; 
+		color: white; 
+		font-weight: bold; 
+		cursor: s-resize;
+		background-repeat: no-repeat;
+        background-position: 3% center;
+	}
+	td, th { 
+		padding: 6px; 
+		border: 1px solid  #ccc; 
+		text-align: left; 
+        font: 12px sans-serif;  
+	}
+        
+     
+	
+
+    </style>
+    <script src="https://d3js.org/d3.v4.min.js"></script>      
+<script src="https://d3js.org/d3-selection-multi.v1.js"></script>
+      <script src="https://unpkg.com/d3-simple-slider"></script>
+      <script src="https://d3js.org/d3-scale-chromatic.v1.js"></script>
+  </head>
+  <body>
+ <div class='col' style="width:69%; float:left;">
+<div class='row' style="height:75%">
+    
+<h2 style='margin-top:20px' align='center'>Early stage investments by stages and industry (top 15), 2012-2019</h2>    
+    <div class='col' style="float:left;">        
+        <div id="viz" style="margin-top:10px"></div></div>
+     </div>
+     
+     <div class='row' style="height:10%; margin-left: 20px; margin-bottom: 15px">
+             <text style='width:80px; font: 12px sans-serif; float:left; align: center; margin-top: 10px;' >Industrty CAGR, % (2012-2019) </text>
+    <div id='legend_place' style="margin-top:10px"  ></div>
+         
+     </div>
+     
+    <div class='row' style="height:10%; margin-left:20px">
+      <text style='margin-top: 5px; font: 12px sans-serif; color:dimgrey'>Source: crunchbase.com (all investments >0.5M USD). Most companies have multi industries tags, therefore, the industries overlap. <br> Overlapping and close industries are connected on the chart</text>
+           </div></div>
+      
+      <div class='col' style="width:6%; height:100%; margin-top:50px; float:left">
+          <div id="slider-vertical" style='height:500px' ></div></div>
+      
+<div class='col' style="width:25%; height:100%; float:right; background-color:  #f0f5f5">
+    <center id='message' style='margin-top: 20px; font: 20px sans-serif; color:grey'>Click the industry to get <br> info on companies</center>
+     <div id="info_table" style='position:relative; top:20px; left:30px'></div>
+    </div>
+      
+    <script>
+
+function name(d) { return d.name; }
+
+var color_positive = d3.scaleOrdinal()
+.domain([1, 2, 3, 4, 5, 7])
+.range(['#ecf9ec', '#c6ecc6', '#8cd98c', '#66cc66', '#39ac39', '#267326']);    
+        
+var color_negative = d3.scaleLinear()
+.domain([0, 0.25, 0.5, 0.75])
+.range(d3.schemeReds[4]);  
+        
+//function colorByGroup(d) { return color(group(d)); }
+
+var width = 960,
+    height = 500;
+
+       
+var svg = d3.select('#viz')
+    .append('svg')
+    .attr('width', 960)
+    .attr('height', height);
+        
+        
+var tooltip = d3.select("body")
+    .append("div")
+    .style("position", "absolute")
+    .style("z-index", "10")
+    .style("visibility", "hidden")
+    .style("color", "white")
+    .style("padding", "8px")
+    .style("background-color", "rgba(0, 0, 0, 0.75)")
+    .style("border-radius", "6px")
+    .style("font", "12px sans-serif")
+    .text("tooltip"); 
+    
+        
+var years=d3.range(8).map(function(d) {    
+    return 2012 + d;
+  });        
+
+//var clicked=0;
+
+var sliderVertical = d3
+    .sliderLeft()  
+    .min(2012)
+    .max(2019)
+    .step(1)
+    .tickFormat(d3.format(".0f"))
+    .height(300) 
+    .tickValues(years)
+    .default(2012)    
+    .on('onchange', function() {
+      updateChart(sliderVertical.value());
+        
+    });
+
+  var gVertical = d3
+    .select('div#slider-vertical')
+    .append('svg')
+    .attr('width', 80)
+    .attr('height', 450)
+    .append('g')
+    .attr('transform', 'translate(60,20)');
+
+  gVertical.call(sliderVertical);
+        
+var dataset;
+
+var node, link;
+
+var simulation;
+        
+var legend = d3.select("#legend_place")
+			.append("svg")
+			.attr("width", 550)
+			.attr("height", 40)
+    .append("g");
+        
+legend.selectAll("rect")
+  .data([7, 5, 4, 3, 2, 1, 0, 0.25, 0.5, 0.75])
+  .enter()
+    .append("rect")
+    .attr("x", function(d, i){return 320-35*i;})
+    .attr("y", 25)
+    .attr("height", 15)    
+    .attr("width", 35)
+    .attr("fill", function(d) { 
+  if (d<1) {return color_negative(d)}
+   else {return color_positive(d)};});
+       
+        
+    legend.selectAll("text")
+  .data(['90%', '50%', '40%', '30%', '20%', '10%', '0%', '-5%', '-10%', '-20%', '-50%'])
+  .enter()
+    .append("text")
+        .attr("x", function(d, i){return 350-35*i;})
+        .attr("y", 20)
+        .text(function(d, i){
+            return d;})   
+        
+d3.json('nodes.json', function(err, data) {    
+    
+    for (var year=2012; year<2020; year++){
+        data[year].nodes.forEach(function(d, i) {
+        d.id = i;      
+    });                   
+    };
+    
+    dataset=data;
+    updateChart(2012)    
+    });
+        
+function updateChart(year){
+//console.log("dataset", dataset[2015])
+    dataset_year=dataset[year]
+   
+//console.log('dataset', dataset_year.nodes)
+    
+svg.selectAll('g').remove();
+    
+simulation = d3.forceSimulation()
+        .force("link", d3.forceLink().id(function (d) {return d.id;}).distance(60).strength(0.5))
+       // .force("charge", d3.forceManyBody(1))
+.force("gravity", d3.forceManyBody(20))
+        .force("center", d3.forceCenter(width / 2, height / 2));
+    
+var link = svg.append("g")
+      .attr("class", "links")
+    .selectAll("line")
+    .data(dataset_year.links)
+ .enter().append("line")
+   .attr("stroke", "black")
+      .attr("stroke-width", 0.7);
+     
+var node = svg.append("g")
+    .selectAll("g")
+    .data(dataset_year.nodes)
+    .enter().append("g");
+
+//node.exit().remove();
+    
+var circles = node.append("circle")
+      .attr("r", function(d) { return d.radius/3;})
+      .attr("fill", '#F0F8FF')
+      .attr('stroke', 'black')
+        .style("stroke-width", 0.5)
+  .attr("fill", function(d) { 
+  if (d.growth<1) {return color_negative(d.growth)}
+   else {return color_positive(d.growth)};})
+    .on("click", function(d) { 
+     //   clicked=1
+     show_companies(d.companies)
+    })        
+  
+      .call(d3.drag()
+            .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended));
+
+
+  node.append("text")
+      .text(function(d) {return d.name;})
+      .attr('x', 6)
+      .attr('y', 3);
+    
+  
+  simulation
+      .nodes(dataset_year.nodes)
+      .on("tick", ticked);
+
+  simulation.force("link")
+      .links(dataset_year.links);
+
+
+  function ticked() {
+    link
+        .attr("x1", function(d) { return d.source.x; })
+        .attr("y1", function(d) { return d.source.y; })
+        .attr("x2", function(d) { return d.target.x; })
+        .attr("y2", function(d) { return d.target.y; });
+
+    
+      var field_margin_w=30;
+      
+      node
+        .attr("transform", function(d) {
+          return "translate(" + d.x + "," + d.y + ")";
+        })
+          .attr("cx", function(d) { return d.x = Math.max(d.radius, field_margin_w, Math.min(width - d.radius, width-field_margin_w, d.x)); })
+        .attr("cy", function(d) { return d.y = Math.max(d.radius, Math.min(height - d.radius,  d.y)); });
+
+  }
+};
+
+
+function dragstarted(d) {
+    console.log("d", d)
+    console.log('simulation', simulation.alphaTarget(0.3))
+  if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+  d.fx = d.x;
+  d.fy = d.y;
+}
+
+function dragged(d) {
+  d.fx = d3.event.x;
+  d.fy = d3.event.y;
+}
+
+function dragended(d) {
+  if (!d3.event.active) simulation.alphaTarget(0);
+  d.fx = null;
+  d.fy = null;
+}
+
+  
+        
+var table = d3.select("#info_table").append("table") //define table outside the function, otherwise new table is created each time
+  thead = table.append("thead").append("tr"),
+  tbody = table.append("tbody");
+    
+function show_companies(companies_list){
+   //     if (clicked==1) {}
+    d3.select('#message').remove()
+       
+    companies_list=companies_list.slice(0,15)
+     var header= thead.selectAll("th")
+                .data(["Company", 'M USD', "Investors"])
+                .enter()
+                .append("th")
+                .attr("align", "left")
+                .text(function(d) { return d; }) //
+                .style("font-family", "sans-serif")
+                 .attr("font-size", "14px")
+
+     ;         
+    
+    tbody.selectAll("tr").remove();
+    
+    var rows = tbody.selectAll("tr")
+             //   .data(companies_listv).enter().append("tr"); 
+    .data(companies_list).enter().append("tr"); 
+    
+    rows.on('mouseover', function(d) {   
+                    tooltip.text(d.descr);   
+                    tooltip.style("visibility", "visible")
+                    .style("left", (d3.event.pageX) + "px")
+                     .style("top", (d3.event.pageY+10) + "px");
+                })
+     .on("mouseout", function(){
+            tooltip.style("visibility", "hidden");    
+        });
+    
+    var cells=rows.selectAll("td").data(function(d) {
+                    return [d.company, d3.format(".1f")(d.value), d.investors];
+                })
+                .enter()
+                .append("td")
+                .attr("align", "left")                
+                .text(function(d) {
+                    return d;
+                })
+            //    .style("font-family", "sans-serif")
+            //     .attr("font-size", "10px")
+                ;
+    ;
+};
+
+    </script>
+  </body>
+</html>

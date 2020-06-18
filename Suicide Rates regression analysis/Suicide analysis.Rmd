@@ -1,0 +1,716 @@
+---
+title: "Suicide analysis"
+output: html_notebook
+---
+### Suicide Rates Analysis
+
+The purposes of the analysis is to find out which factors are attributed to higher suicide rates. The analysis is country based, considers such factors as country GDP, Human development index, age, gender, unemployment rate and mean household size.
+
+### Key conclusions
+
+- The suicide risk increases with ages. People who commit suicide most often are not teenagers, but rather elder people above 55+. People of middle age commit suicide more often than young people
+- Men commit suicide much more often than women. Besides, the risk of commiting suicide increases for men with ages much higher than for women
+- Countries with high GDP and HDI have higher suicide rates, contrary to expectations. One of the explanations can be the higher number of one-person household and childless family, i.e. lonely people. The corellation between smaller households and higher suicide rates is confirmed in the analysis.
+
+Overall, the conclusion from this short analysis is:
+- the highest suicide risk category is 55+ year men living in a rich country
+- the lowest suicide risk category is young (<25 years old) woman in a poor country
+
+
+### Model design
+
+I have started with the variables available in the initial dataset. The key variables which appeared to have effect on the suicide rates from EDA were:
+- age group
+- gender
+- Human Development Index (HDI) of the country
+
+Since all of these were categorical variables, I have used ANOVA type models:
+- Simple additive model
+- Full cells model
+- Mixed model
+
+The mixed model turned the most effective one. 
+
+Further, I have added two numerical variables from differenct sources: unemployment rate and mean household size. For further analysis I have used the mixed ANOVA model with modifications.
+
+### Data Sources
+
+Suicide Rates Overview 1985 to 2016: compares socio-economic info with suicide rates by year and country
+https://www.kaggle.com/russellyates88/suicide-rates-overview-1985-to-2016
+
+Households mean size: https://www.prb.org/international/indicator/hh-size-av/map/country
+
+Unemployment rates: https://data.oecd.org/unemp/unemployment-rate.htm
+
+### Data review
+
+The main dataset I used contains suicide rates by gender and age group for 101 countries, for the years 1986-2015. Since my goal was the analysis of influencing factors, rather than dynamic analysis I used the data only for one year. The latest year with complete data for most countries is 2014.
+
+
+```{r}
+data=read.csv('suicides.csv')
+colnames(data)
+```
+```{r}
+head(data, 5)
+```
+
+101 countries
+
+```{r}
+colnames(data)[1]='country'
+length(unique(data$country))
+```
+
+Data completeness by year and country
+```{r}
+table(data$year)
+```
+
+### EDA
+
+
+#### Suicide rate
+
+Suicide rate is the dependent variable, in this dataset it's number of suicides per 100K of population in a country. In the histogram we see that it's skewed to the left (most countries have low suicide rates) which is challenging for prediction task. For further analysis I will use log(suicide rate), so that the distribution of dependent variable is close to normal, with mean of 2.0 and sd 1.0 (I will use these for the prior values in Bayesian models).
+
+```{r}
+library(ggplot2)
+
+data2014=subset(data, year==2014)
+```
+
+```{r}
+require(gridExtra)
+options(plot.width = 14, plot.height = 4)
+plot1 <- ggplot(data2014, aes(x=suicides.100k.pop))+geom_histogram()+ggtitle('Suicide rate distribution')
+plot2 <- ggplot(data2014, aes(x=log(suicides.100k.pop)))+geom_histogram()+ggtitle('Log distribution')
+grid.arrange(plot1, plot2, ncol=2)
+
+
+```
+
+```{r}
+values=log(data2014$suicides.100k.pop)
+mean(values[values>0], na.rm=TRUE)
+sd(values[values>0], na.rm=TRUE)
+```
+
+#### Explanatory variables
+
+##### Age group
+
+Let's start with the age group. When suicide is discussed in media, it's teenage suicides which mostly gets into spotlight. In reality, however, we see that the higher the age, the higher is the suicide rate. It appears there's some correlation, therefore I'm going to use the age group as an explanatory variable.
+
+```{r}
+data2014$age=factor(data2014$age, levels=c("5-14 years", "15-24 years", "25-34 years", "35-54 years",  "55-74 years", "75+ years"))
+
+ggplot(data2014, aes(x=age, y=log(suicides.100k.pop))) + 
+    geom_boxplot()+ggtitle('Suicide rate by age')
+```
+
+##### Gender
+
+Men have significantly higher suicide rate than women. Gender will also be used as an explanatory variable.
+
+```{r}
+library(ggplot2)
+ggplot(subset(data2014), aes(x=sex, y=log(suicides.100k.pop))) + 
+    geom_boxplot()
+```
+
+
+#### Human Development Index and GDP
+
+The chart doesn't show any corellation between GDP and suicide rate. However, if we look at the Human Development Index, although there's no clear correllation, we can see that high suicide rates appear in the countries with high HDI (>0.75). Therefore, I will use HDI as a variable in the model, but I transform it into the binary variable (below and above 0.75 threshold) instead of numeric, because there's no direct corellation. 
+The last chart shows perfect correllation between GDP and HDI. Therefore, I do not use GDP in the model.
+
+```{r}
+#### Summarized data by countries - for all ages and both genders
+data2014_combined<-read.csv('data2014_gr.csv')
+```
+
+```{r}
+ggplot(data2014_combined, aes(x=log(GDP_capita), y=suicide_rate)) + geom_point()+labs(title="Suicide rate vs GDP per capita")
+```
+
+```{r}
+ggplot(data2014_combined, aes(x=HDI, y=suicide_rate)) + geom_point()+labs(title="Suicide rate vs Human Development Index")+geom_vline(xintercept = 0.75, color='red')
+```
+
+```{r}
+ggplot(data2014_combined, aes(x=log(GDP_capita), y=HDI)) + geom_point()+labs(title="GDP vs Human Development Index")
+```
+
+
+#### Key factors for the first model
+
+Overall, the key factors I have chosen to build the first model, are:
+- age group (young (<24), middle age (25-55)), elderly (55+)). For simplicity, I have made 3 age groups instead of 5.
+- gender (female, male)
+- HDI (less and more than 0.75)
+
+
+
+```{r}
+### Data with 5 age groups transformed into 3.
+### Na values
+data2014_grouped=read.csv('data2014_grouped.csv')
+```
+
+```{r}
+### Countries with NA entries which will be excluded from analysis
+print(anyNA(data2014_grouped))
+ind=which(is.na.data.frame(data2014_grouped), arr.ind=TRUE)[,'row']
+print(unique(data2014_grouped[ind,'country']))
+data2014_grouped=na.omit(data2014_grouped)
+```
+
+
+```{r}
+### data.frame transformations for further analysis
+data2014_grouped$HDI_group<-as.factor(data2014_grouped$HDI_group)
+data2014_grouped$age_group <- factor(data2014_grouped$age_group, levels = c('young', 'middle', 'elder'))
+```
+
+
+
+#### Two-factor charts
+
+The below charts demonstrate:
+- increasing suicide rates by age_groups, both for men and women;
+- small difference between high-HDI and low-HDI countries suicide rates by age groups. Except, for the middle ages the difference is clear. I expect we will have to use the interaction variable for HDI and age group, since the effect is different by groups
+
+```{r}
+ggplot(data2014_grouped, aes(x=age_group, y=log(suicide_rate), fill=sex)) + geom_boxplot()+ggtitle('Suicide rate by age and gender')
+
+ggplot(data2014_grouped, aes(x=age_group, y=log(suicide_rate), fill=HDI_group)) + geom_boxplot()+ggtitle('Suicide rate by age and HDI')
+
+ggplot(data2014_grouped, aes(x=age_group, y=log(suicide_rate), fill=HDI_group)) + geom_boxplot()+ggtitle('Suicide rate by gender and HDI')
+
+```
+
+## Regression models
+
+### Additive Model
+
+I'm going to build a simple additive model, using OLS regression and Bayesian regression. The additive model suggests the same effect of age on both female and male, and the same effect of high Human Development Index on all groups, since we do not use any interactive variables. This can be oversimplifation, as we will see later. 
+
+
+####  Frequentist Ordinary Least Square (OLS) Linear Regression
+
+##### Model quality:
+- all coefficients are statistically significant with the confidence interval of 95%
+- the residuals distribution is close to normal, with the skew related to zero suicide rates (which for the purposes of logarithm were given small value of 0.01). The mean residual is close to zero at all predicted values, the standard deviation doesn't change with the predicted value. Therefore, the model looks satisfactory.
+- AIC = 1253. We will use it for comparison with other OLS models
+
+##### Model inference:
+- the intercept in this case is young woman living in a country with low Human Development Index, associated with the lowest suicide rate. The value is 0.9, meaning the suicide rate = e^0.9=2.4 cases per 100K
+- being male increases suicide rate by 1.4 log value, i.e. e^1.4=4 times compared to women, or 9.6 cases per 100K population 
+- middle age and elder age group have statistically significant higher suicide rates, of approximately 1.0 logged value, or 2.7 times higher than young people
+- living in a country with high HDI group increases the risk of suicide by 0.3 log value, or 1.35 times 
+
+
+```{r}
+fit1<-lm(log(suicide_rate+0.01) ~ sex + age_group + HDI_group, data=data2014_grouped)
+summary(fit1)
+plot(fit1, 2)
+plot(fit1, 1)
+```
+```{r}
+AIC(fit1)
+```
+
+
+#### Bayesian statistics model
+
+##### Model quality:
+
+- I have used (2.0, 1.0) prior for mu, given the distribution of suicide rates
+- the model converges for all variables
+- coefficients means estimations are close to OLS regression model coeffcieints. However, OLD model returns smaller standard deviations
+- HDI group coefficient is not statistically significant, unike OLS regression, because of larger standard deviation in the Bayesian model
+- The residuals plot show some outliers on the upper end, but otherwise the distrubtion is close to normal. The outliers are due the observations with zero suicide rate from countries with small population
+- DIC=1311, to be used for comparison with other models
+
+##### Model inference:
+
+- Similarly to OLS regression model results, the suicide rate increases for male by 1.4 logged value and for middle and elder age by 1 logged value, on average. However, there's no statistically significant effect for countries with high HDI
+
+```{r include = FALSE}
+library("rjags")
+
+mod1_string = " model {
+    for( i in 1:length(y)) {
+        y[i] ~ dnorm(mu[i], prec)
+        mu[i] = int + alpha*sexmale[i] + beta[1]*age_groupmiddle[i] + beta[2]*age_groupelder[i]+theta*HDI_group1[i]
+
+        
+    }
+    
+    int ~ dnorm(2.0, 1.0/1.0)
+    alpha ~ dnorm(0.0, 1.0/1.0)
+    beta[1] ~ dnorm(0.0, 1.0/1.0)
+    beta[2] ~ dnorm(0.0, 1.0/1.0)
+    theta ~ dnorm(0.0, 1.0/1.0)
+
+    prec ~ dgamma(1.0/2.0, 1.0*400.0/2.0)
+    sig = sqrt(1.0 / prec)
+    
+} "
+
+data1_jags = list(y=log(data2014_grouped$suicide_rate+0.01), sexmale=X[,"sexmale"], age_groupmiddle=X[,"age_groupmiddle"], age_groupelder=X[,"age_groupelder"], HDI_group1=X[,"HDI_group1"])
+
+params1 = c("int", "alpha", "beta", "theta","sig")
+
+```
+
+
+```{r include = FALSE}
+mod1 = jags.model(textConnection(mod1_string), data=data1_jags, n.chains=3)
+update(mod1, 1e3)
+
+mod1_sim = coda.samples(model=mod1,
+                        variable.names=params1,
+                        n.iter=1e4)
+```
+
+
+```{r include = FALSE}
+gelman.diag(mod1_sim)
+autocorr.diag(mod1_sim)
+effectiveSize(mod1_sim)
+```
+
+```{r}
+summary(mod1_sim)
+```
+
+
+```{r include=FALSE}
+dic1 = dic.samples(mod1, n.iter=1e3)
+dic1
+```
+
+#### Residuals chart
+
+```{r}
+coeffs=apply(mod1_sim[[1]], 2, FUN=mean)
+mod1_matrix=as.data.frame(model.matrix(~sex+age_group+HDI_group, data2014_grouped))
+head(mod1_matrix)
+```
+
+```{r}
+results=coeffs['int']+
+  coeffs['alpha']*mod1_matrix[,'sexmale']+
+  coeffs['beta[1]']*mod1_matrix[,'age_groupmiddle']+
+  coeffs['beta[2]']*mod1_matrix[,'age_groupelder']+
+  coeffs['theta']*mod1_matrix[,'HDI_group1']
+```
+
+
+```{r}
+plot(results,
+     results-log(data2014_grouped[,'suicide_rate']+0.01), xlab='suicide_rate',
+     ylab='residual')
+abline(h=0, col="red")
+```
+```{r}
+qqnorm(results-log(data2014_grouped[,'suicide_rate']+0.01))
+```
+
+
+
+### Full cell model
+
+In this model we wll use separate means and standard deviations for each of 12 groups. The model implies that the effect of age is different depending on gender, and the effect of living in high-HDI country is different depending on gender and age.
+
+#### Frequentist OLS regression model
+
+In the OLS regression with model different means for each group through interactive variables between three explanarory factors: sex*age_group, sex*HDI_group, age_group*HDI_group
+
+##### Model quality:
+
+- the majority of variables are not statistically significant, including HDI and, even, age groups. It appeas that they're replaced with correllated interactive variables: sexmale*age_groupelder and HDIgroup1:age_groupelder are statistically significant
+
+- the residuals distribution is close to normal, the mean is close to zero for all predicted values with the standard deviation close to constant
+
+- AIC 1250 is lower than AIC of 1253, meaning the model has better explanation power even given the penalty for more variables
+
+##### Model inference:
+
+The model returns very different results than the firt model:
+- the intercept, meaning young woman in low-HDI country is 1.6 vs 0.9 in the previous model. meaning exp(0.7)=2 times higher estimation
+- the mean difference between young men and women is not statistically significant, this is the key difference between the two models. In the first model the difference was 1.4 log values, or 4 times. The difference is statistically significant only for men of old age
+- the effect of middle age compared to young age is not statistically significant. The effect of elder age compared to young is statistically significant, but only for men, and only those living in low-HDI countries, with estimated mean 1.7 logged value, or exp(1.7)=5.5 times higher
+- living in high-HDI country has a significant negative impact on aged women, i.e. the suicide rates increases by 1.6 logged values, or 5.0 times compared to young women in low-HDI countries. However, for elder men in high-HDI countries the effect is the opposite
+
+```{r}
+fit2<-lm(log(suicide_rate+0.01) ~ sex + age_group + HDI_group + sex*age_group +
+          sex*HDI_group + age_group*HDI_group + + age_group*sex*HDI_group, data=data2014_grouped)
+summary(fit2)
+plot(fit2, 2)
+plot(fit2, 1)
+```
+```{r}
+AIC(fit2)
+```
+
+
+#### Bayesian regression model
+
+##### Model quality:
+
+- the model converges for all variables, and the effective size is close to maximum because of low autocorrellation
+- residuals satisfy the criteria of zero mean, constant standard deviation and normal distribution
+- DIC 1311 is equal to DIC of the first model, with lower mean deviation but higher variables penalty
+
+##### Model inference:
+
+The means for the following groups is close to OLS model results: 
+- young women in low-HDI (1.8)
+- elder men in low HDI (3.3)
+
+The biggest difference between the models is:
+- elder men in high HDI countries. While OLS regression model returned low suicide rate for this group (close to young men in low-HDI country), the Bayesian models returns the highest suicide rate of 3.7 logged values, or 4.5 times higher than young men in low-HDI countries, and 1.5 higher than same elder men in low-HDI countries. This correponds better with our initial EDA
+
+The new finding is:
+- the lowest risk categories are young women in high-HDI countries, they have 1.5 times lower suicide rate than young women in low-HDI countries. Another low-risk category is elder women in low-HDI countries. Both of these effects were not detected in the OLS regression, or rather, they turned not statistically significant
+
+```{r include = FALSE}
+
+mod2_string = " model {
+    for( i in 1:length(y)) {
+        y[i] ~ dnorm(mu[sex[i], age_group[i], HDI_group[i]], prec)
+    }
+
+    for (j in 1:2) {
+        for (k in 1:3) {
+          for (m in 1:2) {
+            mu[j,k,m] ~ dnorm(2.0, 1.0/1.0)
+        }
+    }
+    
+    }
+
+            prec ~ dgamma(1.0/2.0, 1.0*400.0/2.0)
+            sig = sqrt(1.0 /prec)
+}"
+
+data2_jags = list(y=log(data2014_grouped$suicide_rate+0.01), sex=as.numeric(data2014_grouped$sex), age_group=as.numeric(data2014_grouped$age_group),  HDI_group=as.numeric(data2014_grouped$HDI_group))
+
+params2 = c("mu", "sig")
+
+```
+
+
+```{r include=FALSE}
+mod2 = jags.model(textConnection(mod2_string), data=data2_jags, n.chains=3)
+update(mod2, 1e3)
+
+mod2_sim = coda.samples(model=mod2,
+                        variable.names=params2,
+                        n.iter=1e4)
+```
+
+
+```{r include=FALSE}
+gelman.diag(mod2_sim)
+autocorr.diag(mod2_sim)
+effectiveSize(mod2_sim)
+
+```
+
+
+```{r include=FALSE}
+dic2 = dic.samples(mod2, n.iter=1e3)
+dic2
+```
+
+```{r}
+summary(mod2_sim)
+
+```
+
+
+```{r}
+coeffs=apply(mod2_sim[[1]], 2, FUN=mean)
+coeffs
+```
+
+```{r}
+results=coeffs[sprintf("mu[%d,%d,%d]",as.numeric(data2014_grouped[,'sex']), as.numeric(data2014_grouped[,'age_group']),as.numeric(data2014_grouped[,'HDI_group']))]
+```
+
+
+```{r}
+plot(results,
+     results-log(data2014_grouped[,'suicide_rate']+0.1), xlab='suicide_rate',
+     ylab='residual')
+abline(h=0, col="red")
+```
+```{r}
+qqnorm(results-log(data2014_grouped[,'suicide_rate']+0.1))
+```
+
+#### Mean cell plus additive
+
+Now I'm going to try the mixed model, assuming that the effect of HDI country is not very strong and we can make it equal for all groups, regardless of gender and age.
+
+#### OLS regression
+
+##### Model quality:
+
+- most coefficients are statistically significant with confidence level 0.95
+- the residuals meet the main criteria (zero conditional mean, constant standard deviation, normal distribution)
+- AIC=1100 is significantly lower than the AIC of the first two models, 1250. This makes the third regression model the preferred one, if we used OLS regression only
+
+##### Model inference
+
+- the suicide rate for the basis group (young women in low HDI countries) is 1.1 logged value, which is between the first model (0.9) and the second model (1.6) coefficients for the group
+- the difference between men and women, young and middle age, is 1.0 logged value. Which is clode to the first model result (1.4), the second model returned no statistically significant difference at all
+- Women of middle and old age have 0.8 logged value higher suicide rate. This is close to the first model result of 1.0 for age factors, expect in the first model it was for both men and women. 
+- For men of middle age the coefficient is not statistically significant, thus their estimated suicide rate is equal to that of middle-age women, but for men of older age the risk factor increases by 0.5 logged value
+- high HDI country adds 0.3 to logged suicide rate, which corresponds with the first model result. 
+- Overall, in this model too the top-risk category are elder men living in high-HDI countries and the lowest-risk are young women in the low-HDI countries. This is the same outcome as in the first simple regression model, but this is different from Full Cell means model where the lowest risk category are young women in high-HDI countries.
+
+```{r}
+
+fit3<-lm(log(suicide_rate+0.1) ~ sex + age_group + HDI_group + sex*age_group, data=data2014_grouped)
+summary(fit3)
+print(AIC(fit3))
+plot(fit3, 2)
+plot(fit3, 1)
+plot(fit3, 3)
+```
+
+#### Bayesian model
+
+##### Model quality
+
+- the residuals meet the basic criteria
+- all coefficients are statistically significant, except for HDI group. Similar to the first model, HDI coefficient in the Bayesian model has higher SD than the OLS regression
+- DIC=1311 is the same as of the first and second model
+
+##### Model inference
+
+- basis group (young women in low-HDI countries) has the lowest suicide rate of 0.9. Since the HDI coefficient is not statistically significant, so are the young women in high HDI countries
+- the difference between young men and women is not statistically significant (unlike the first model)
+- middle-age and old-age women have higher suicide rate (by 0.8 logged value) than young women. For men the difference is much higher: 2.1 logged value for middle-age men, 2.3 for old men 
+- Overall, the results are close to the results of the first model, except that in this model we better account for the difference in the effect of age for men and women: old age has higher impact on men than on women
+
+
+```{r include = FALSE}
+
+mod3_string = " model {
+    for( i in 1:length(y)) {
+        y[i] ~ dnorm(int+mu[sex[i], age_group[i]]+theta*HDI_group[i], prec)
+    }
+
+    for (j in 1:2) {
+        for (k in 1:3) {
+            mu[j,k] ~ dnorm(0.0, 1.0/1.0)
+        }
+    }
+
+  int ~ dnorm(2.0, 1.0/1.0)
+  theta ~ dnorm(0.0, 1.0/1.0)
+prec ~ dgamma(1.0/2.0, 1.0*400.0/2.0)
+sig = sqrt(1.0 /prec)
+    
+}"
+
+data3_jags = list(y=log(data2014_grouped$suicide_rate+0.01), sex=as.numeric(data2014_grouped$sex), age_group=as.numeric(data2014_grouped$age_group),  HDI_group=as.numeric(data2014_grouped$HDI_group))
+
+params3 = c("mu", 'theta', "int", "sig")
+
+
+```
+
+
+```{r include = FALSE}
+mod3 = jags.model(textConnection(mod3_string), data=data3_jags, n.chains=3)
+
+update(mod3, 1e3)
+
+mod3_sim = coda.samples(model=mod3,
+                        variable.names=params3,
+                        n.iter=1e5)
+```
+
+```{r }
+gelman.diag(mod3_sim)
+autocorr.diag(mod3_sim)
+effectiveSize(mod3_sim)
+```
+
+```{r include=FALSE}
+dic3 = dic.samples(mod3, n.iter=1e3)
+dic3
+```
+
+```{r}
+summary(mod3_sim)
+```
+
+
+
+### Add other factors: unemployment rate, household size
+
+In an attempt to explain why countries with higher GDP and HDI, contrary to expectation, have higher suicide rate, I've decided to try to use additional explanatory variables. It is believed that  unemployment and loneliness increase the risk of suicide. Therefore, I have added unemployment rates in countries to the original dataset, and the mean household size by countries. For the latter it would be better to use the share of one-person households, but I haven't found the data for all the countries, and decided to use the mean household size as a substitute, since the two are highly correllated. 
+
+### Conclusions from the models:
+
+- the lowest risk category are young women in countries associated with larger household size, i.e. low HDI. 
+
+-being male increases the risk of suicide by 1.0 of log suicide rate, and the difference increases with ages to 1.5. That means, for men older age have higher impact on suicide rate than for women
+
+- average household size is correlated with suicide rate: 1% larger household size decreases the suicide risk by 2%. This is a very important finding: studies show that the suicide rate is higher among lonely people and people living without children. This is one of the explanations why high-income contries have higher suicide rate, contrary to the common sense. These countries have larger share of single households
+
+- there's a small, but statistically significant, coefficient of unemployment rate. This model shows that higher unemployment rate is corellated with slightly lower suicide rates, which is contrary to other studies. My expectation is that there is another explanatory (ommited) variable corellated both with the unemployment rate and the suicide rate (e.g. non-registered emploment in low-income countries), which creates this effect. However, the effect is very small, therefore, I do not go deeper within this work
+
+#### New expanatory variables distribution and correlations
+
+The distribution of mean household size is skewed to the left, therefore, I will use log of the variable for the model, so that the distribution is closer to normal.
+
+```{r}
+plot1 <- ggplot(data2014_grouped, aes(x=unempl))+geom_histogram()+ggtitle('Unemployment rate distribution')+ stat_bin(bins = 10)
+plot2 <- ggplot(data2014_grouped, aes(x=household))+geom_histogram()+ggtitle('Mean household size distribution')+ stat_bin(bins = 10)
+grid.arrange(plot1, plot2, ncol=2)
+
+
+```
+HDI and mean household size have a strong negative correlation, therefore, we can get skewed results if we use both variables in the model. Since in this case I'm interested in the effect of household structure on suicide rate specifically, I will use the mean household size in the model.
+
+```{r}
+pairs(~ HDI + unempl + household, data = data2014_combined)
+```
+
+
+#### OLS regression model
+
+##### Model quality
+
+- model residuals meet the key criteria, although for lower values the residuals are slighly higher, meaning for low values the model slightly overestimates
+- coefficients for both added variables are statistically significant
+- DIC=1150 is higher than DIC=1125 of the mixed ANOVA model
+
+##### Model inference
+- the model shows statistically significant difference between young men and women, of 1.0 logged value. This is close to the very first OLS model result
+- the model shows statistically significant difference between women of different age
+- men of old age have higher suicide rate: 0.6 compared to young men. For middle aged men the coefficient is not statistically significant
+- larger average household is associated with significantly lower suicide rate. 1% larger family decreases the suicide risk by 1.6%, since we used logged household value
+
+
+
+```{r}
+fit4<-lm(log(suicide_rate+0.01) ~ sex + age_group + sex*age_group + unempl+log(household), data=data2014_grouped)
+summary(fit4)
+AIC(fit4)
+plot(fit4, 2)
+plot(fit4, 1)
+```
+
+
+
+#### Bayesian regression model
+
+##### Model quality
+
+- model residuals meet the key criteria
+- coefficients for both added variables are statistically significant
+- DIC=1237 is better than DIC=1311 I had from the mixed ANOVA model 
+
+##### Model inference
+- the model doesn't show statistically significant difference between young men and women, similar to the previous model 
+- the model also doesn't show statistically significant difference between women of difference age, this is different from the previous model in which elder women had higher predicted suicide rate
+- men, however, have significantly higher suicide rate as they age: 2.1 logged value for middle-age men, 2.3 for old men (similar to the last model)
+- larger average household is associated with significantly lower suicide rate. 1% larger family decreases the suicide risk by 1.6%, since we used logged household value
+
+
+```{r }
+
+mod4_string = " model {
+    for( i in 1:length(y)) {
+        y[i] ~ dnorm(int+mu[sex[i], age_group[i]]+theta*household[i]+delta*unempl[i], prec)
+    }
+
+    for (j in 1:2) {
+        for (k in 1:3) {
+            mu[j,k] ~ dnorm(0.0, 1.0/1.0)
+        }
+        }
+  int ~ dnorm(2.0, 1.0/1.0)
+  theta ~ dnorm(1.0, 0.2)
+delta ~ dnorm(9.0, 6.0)
+
+prec~ dgamma(1.0/2.0, 1.0*400.0/2.0)
+  sig = sqrt(1.0 /prec)
+    
+}"
+
+
+data4_jags = list(y=log(data2014_grouped$suicide_rate+0.01), sex=as.numeric(data2014_grouped$sex), age_group=as.numeric(data2014_grouped$age_group),  household=log(data2014_grouped$household), unempl=data2014_grouped$unempl)
+
+params4 = c("mu", 'theta', "delta", "int", "sig")
+
+
+```
+
+
+```{r include = FALSE}
+library('rjags')
+mod4 = jags.model(textConnection(mod4_string), data=data4_jags, n.chains=3)
+update(mod4, 1e4)
+
+mod4_sim = coda.samples(model=mod4,
+                        variable.names=params4,
+                        n.iter=1e5)
+```
+
+
+```{r }
+gelman.diag(mod4_sim)
+autocorr.diag(mod4_sim)
+effectiveSize(mod4_sim)
+```
+
+```{r}
+dic4 = dic.samples(mod4, n.iter=1e4)
+dic4
+```
+
+```{r}
+summary(mod4_sim)
+```
+
+### Analysis of residuals:
+
+```{r}
+coeffs=apply(mod4_sim[[1]], 2, FUN=mean)
+
+mod4_matrix=model.matrix(~ age_group+sex+unempl+household+suicide_rate, data=data2014_grouped)
+mod4_matrix=as.data.frame(mod4_matrix)
+
+### only statistically significant coefficients
+results=coeffs['int']+
+  coeffs['delta']*mod4_matrix$unempl+
+  coeffs['theta']*log(mod4_matrix$household)+
+  coeffs['mu[1,1]']*(1-mod4_matrix$sexmale)*(1-(mod4_matrix$age_groupmiddle+mod4_matrix$age_groupelder))+
+  coeffs['mu[2,2]']*mod4_matrix$sexmale*mod4_matrix$age_groupmiddle+
+  coeffs['mu[2,3]']*mod4_matrix$sexmale*mod4_matrix$age_groupelder
+
+```
+
+```{r}
+plot(results,
+     results-log(data2014_grouped[,'suicide_rate']+0.01), xlab='suicide_rate predicted',
+     ylab='residual')
+
+abline(h=0, col = "red")
+```
+
+```{r}
+qqnorm(results-log(data2014_grouped[,'suicide_rate']+0.01))
+```
+

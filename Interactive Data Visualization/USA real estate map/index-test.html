@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+	<meta charset="utf-8" http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>...</title>
+
+    <script src="https://d3js.org/d3.v4.min.js"></script> 
+	<script src="https://d3js.org/queue.v1.min.js"></script>
+	<script src="https://d3js.org/topojson.v1.min.js"></script>
+    <script src="https://d3js.org/d3-scale-chromatic.v1.js"></script>
+    <script src="https://unpkg.com/d3-simple-slider"></script>
+    <script src = "https://d3js.org/d3-dsv.v1.min.js"></script>
+    
+
+</head>
+
+<style>    
+
+/* On mouse hover, lighten state color */
+path:hover {
+	fill-opacity: .7;
+}
+
+/* Style for Custom Tooltip */
+div.tooltip {   
+ 	position: absolute;  
+    z-index: 10;
+	text-align: center;           
+	width: 60px;                  
+	height: 28px;                 
+	padding: 2px;             
+	font: 12px sans-serif;        
+	background: white;   
+	border: 0px;      
+	border-radius: 8px;           
+	pointer-events: none;         
+}
+    
+    
+/* Legend Font Style */
+body {
+	font: 11px sans-serif;
+}
+        
+
+.button {
+  background-color:whitesmoke;
+  box-shadow: 0px 2px 3px #666666;
+  border: solid white 2px;
+  border-radius: 10px;
+   color:black;
+  font-size: 14px;
+  text-anchor: middle;
+  padding: 3px 10px; 
+ margin-left:10px;
+    margin-top:5px;
+    height:  40px; 
+    width: 140px;
+    float: left;
+  
+}
+  
+.slider
+    {   margin-top:5px;
+        margin-left: 10px;
+        float:left;
+    }
+
+
+</style>
+
+<body>  
+
+<div class=”col” style="width:960px; float:left;">
+<h1 style='margin-top:30px' align='center'>USA: choose the best place to live</h1>
+<div id="chart" style='width: 960px; align-content: top; vertical-align: top' >      
+           </div>
+    <div id='legend_place'></div>
+    <div id='sources' style="margin-left:35px; margin-right:20px; margin-top:20px"><b style='color:dimgrey'>Sources:</b>
+        <li style='color:dimgrey'>Temperature data: https://www.ncdc.noaa.gov/climate-information/statistical-weather-and-climate-information The data is the average for the period of 2010-2020, average of each State Climatic Divisions, as defined by NOAA. </li>
+        <li style='color:dimgrey'>Violent crimes data: https://ucr.fbi.gov/crime-in-the-u.s Number of reported offenses per 100,000 of the population, 2018 (murder and nonnegligent manslaughter, forcible rape, robbery, and aggravated assault)</li>
+        <li style='color:dimgrey'>Median Rent data: https://www.huduser.gov/portal/datasets/50per.html Fair Market Rent, 2019 </li>
+        <li style='color:dimgrey'>The data doesn't include Hawaii and Alaska States </li>
+    </div>
+</div>
+    
+<div class=”col” style="width:350px; float:left; margin-top:50px">  
+    <div><button type="button" class='button' onclick="updateTemp()" style='margin-top:15px'>Temperature, F (by month)</button></div>    
+    <div id="slider-temp"></div>
+    <div id="slider-time" ></div>
+        
+    <div><button type="button" class='button' onclick="updateCrime()" >Violent Crimes, per 100K pop</button></div>
+    <div id="slider-crime" ></div>
+<div><button type="button" class='button' onclick="updateHouse()" >Median rent cost, K USD</button></div>
+    <div id="slider-house" ></div>
+</div>
+
+
+
+<script>
+    
+// full list of states
+var width = 960;
+var height = 500;
+
+//tooltips
+var tooltip = d3.select("#chart")
+     .append('div')
+    .style("position", "absolute")
+    .style("z-index", "10")
+    .style("visibility", "hidden")
+    .style("color", "white")
+    .style("padding", "8px")
+    .style("background-color", "rgba(0, 0, 0, 0.75)")
+    .style("border-radius", "6px")
+    .style("font", "12px sans-serif")
+    .text("tooltip");
+    
+
+//Create SVG element and append map to the SVG
+var svg = d3.select("#chart")
+			.append("svg")
+			.attr("width", width)
+			.attr("height", height);
+        
+// Append Div for tooltip to SVG
+var div = d3.select("body")
+		    .append("div")   
+    		.attr("class", "tooltip")               
+    		.style("opacity", 0);
+    
+// Create element for legend
+var legend = d3.select("#legend_place")
+			.append("svg")
+			.attr("width", width)
+			.attr("height", 45)
+    .append("g");
+
+
+    
+
+
+// Define path
+var projection = d3.geoAlbersUsa() 
+				   .translate([width/2, height/2])    // translate to center of screen
+				   .scale([1000]);          // scale things down so see entire US
+        
+// Define path generator
+var path = d3.geoPath()               // path generator that will convert GeoJSON to SVG paths
+		  	 .projection(projection);
+    
+var temp_domain=[10, 20, 30, 40, 50, 60, 70, 80]
+var temp_labels=["10+", "20+", "30+", "40+", "50+", "60+", "70+", "80+"];    
+
+var color_temp = d3.scaleLinear()
+.domain(temp_domain)
+.range(d3.schemeOranges[8]);    
+
+var crime_domain=[0, 50,  100, 150, 200, 250, 300, 400, 500]
+var crime_labels=["<50", "50+", "100+", "150+", "200+", "250+", "300+", "400+", "500+"];
+    
+var color_crime = d3.scaleLinear()
+.domain([0, 50,  100, 150, 200, 250, 300, 400, 500]) 
+.range(d3.schemeBlues[7]);    
+    
+var rent_domain=[600, 650, 700, 750, 800, 850, 900, 1100]
+var rent_labels=["600+", "650+", "700+", "750+", "800+", "850+", "900+", "1100+"];
+    
+var color_rent = d3.scaleLinear()
+.domain([600, 650, 700, 750, 800, 850, 900, 1000])
+.range(d3.schemeGreens[7]);
+    
+    
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+var us;
+    
+var dataTemp = {};
+var dataRate = {};
+var dataName = {};
+var dataRent = {};
+var dataState = {};    
+    
+var count_house=0;
+var count_temp=0;
+var count_crime=0;
+    
+var crime_max;
+var house_max;
+var house_min;
+var temp_min;
+var temp_max;
+var r_w=60;
+//////////////////////////////////////////////////////////////////////////////////////////////
+    
+var month=d3.range(1,13).map(function(d) {
+    return d;
+  });
+
+var sliderTime = d3
+    .sliderBottom()
+    .min(d3.min(month))
+    .max(d3.max(month))
+    .step(1)
+    .width(300)
+   // .tickFormat(d3.timeFormat('%m'))
+    .tickValues(month)
+    .default(6)
+    .on('onchange', function() {   
+        updateTemp();
+    });
+
+    
+var gTime = d3
+    .select('div#slider-time')
+    .append('svg')
+    .attr('width', 500)
+    .attr('height', 90)
+    .append('g')
+    .attr('transform', 'translate(30,30)');
+
+  gTime.call(sliderTime);
+    
+    
+// Add range slides
+    //temperature (range)
+    
+var month_temp=d3.range(10, 100)
+
+var sliderRange = d3
+    .sliderBottom()
+    .min(d3.min(month_temp))
+    .max(d3.max(month_temp))
+    .width(300)
+    .ticks(10)
+    .default([d3.min(month_temp), d3.max(month_temp)])
+    .fill('#2196f3')
+    .on('onchange', function(){
+        count_temp=1;
+        updateTemp();
+    });
+
+  var gRange = d3
+    .select('div#slider-temp')
+    .append('svg')
+    .attr('width', 350)
+    .attr('height', 70)
+    .append('g')
+    .attr('transform', 'translate(30,30)');
+
+  gRange.call(sliderRange);
+
+    
+///////////////////////////////////////////////////////////////////////////////////////////
+var crime_range=d3.range(0, 1000)
+
+var sliderFill = d3
+    .sliderBottom()
+    .min(d3.min(crime_range))
+    .max(d3.max(crime_range))
+    .width(300)
+    .ticks(8)
+    .default(d3.max(crime_range))
+    .fill('#2196f3')
+    .on('onchange', function() {
+        count_crime=1;
+      updateCrime();
+    });
+
+  var gFill = d3
+    .select('div#slider-crime')
+    .append('svg')
+    .attr('width', 350)
+    .attr('height', 80)
+    .append('g')
+    .attr('transform', 'translate(30,30)');
+
+  gFill.call(sliderFill);
+
+//////////////////////////////////////////////////////////
+    
+var rent_value=d3.range(500, 2500)
+
+var sliderRange_1 = d3
+    .sliderBottom()
+    .min(d3.min(rent_value))
+    .max(d3.max(rent_value))
+    .width(300)
+    .ticks(6)
+    .default([d3.min(rent_value), d3.max(rent_value)])
+    .fill('#2196f3')
+    .on('onchange', function(){
+      //console.log('temp range', sliderRange.value()[0])
+        count_house=1;
+        updateHouse();
+    });
+
+  var gRange = d3
+    .select('div#slider-house')
+    .append('svg')
+    .attr('width', 350)
+    .attr('height', 100)
+    .append('g')
+    .attr('transform', 'translate(30,30)');
+
+  gRange.call(sliderRange_1);
+        
+    
+///////////////////////////////////////////////////////////
+
+
+d3.json('us.json', function(data) {
+     us=data; 
+    
+d3.csv("county_data.csv", function(data) {
+    //crime_county=data;
+    
+    for (var month=1; month<13; month++){
+            dataTemp[month]= {};
+            		 };
+    
+        
+    data.forEach(function(d) {
+        dataName[d.id] = d.county;
+        dataRate[d.id] = d.rate;
+        dataRent[d.id] = d.rent;
+        dataState[d.id]=d.state;        
+             
+        for (var month=1; month<13; month++){
+            dataTemp[month][d.id]= d3.format(".1f")(d[month]);
+            		 };        
+    });
+    
+  //  console.log("dataTemp", dataTemp[6])
+    
+    
+    svg.selectAll("path")
+	.data(topojson.feature(us, us.objects.counties).features)  // us-states.features
+	.enter()
+	.append("path")
+	.attr("d", path)
+	.style("stroke", "#fff")
+	.style("stroke-width", "0.5")
+    .style ( "fill" , function (d) {
+   
+		 return color_temp(dataTemp[sliderTime.value()][d.id]) ;
+		 })
+    
+    .on("mouseover", function(d) {    
+    tooltip.text(dataState[d.id]+","+dataName[d.id]+":" + dataTemp[sliderTime.value()][d.id]); 
+  //  tooltip.text(dataName[d.id])
+    tooltip.style("visibility", "visible")
+    .style("left", (d3.event.pageX) + "px")
+	 .style("top", (d3.event.pageY -30) + "px");
+    
+     });
+
+    svg.append("path")
+      .data(topojson.feature(us, us.objects.states).features)
+      .attr("fill", "none")
+      .style("stroke", "black")
+    .style("stroke-width", "1")
+      .attr("stroke-linejoin", "round")
+      .attr("d", path);     
+    
+      
+    
+    legend.selectAll("rect")
+  .data(temp_domain)
+  .enter()
+    .append("rect")
+    .attr("x", function(d, i){return (width-(temp_domain.length*r_w))/2+(i*r_w);})
+    .attr("y", 30)
+    .attr("height", 15)    
+    .attr("width", r_w)
+    .attr("fill", function(d) { return color_temp(d); });
+    
+    legend.selectAll("text")
+  .data(temp_labels)
+  .enter()
+    .append("text")
+        .attr("x", function(d, i){return (width-(temp_domain.length*r_w))/2+(i*r_w)+5;})
+        .attr("y", 25)
+        .text(function(d, i){
+            return d;})   
+});
+    
+      svg.append("path")
+      .data(topojson.mesh(us, us.objects.states, (a, b) => a !== b))
+      .attr("fill", "white")
+      .attr("stroke", "black")
+    .style("stroke-width", "2.0")
+      .attr("stroke-linejoin", "round")
+      .attr("d", path);
+    
+});
+    
+////////////////////////////////////////////////////////////////////////    
+
+ 
+        
+    
+function updateTemp()
+    {                
+   // console.log('dataTemp', dataTemp[sliderTime.value()])
+        
+    svg.selectAll("path")
+    .style ( "fill" , function (d) {
+     return color_temp(dataTemp[sliderTime.value()][d.id]);   
+    })
+        
+    .style ( "opacity" , function (d) {
+       
+    if (count_temp==1)
+        {temp_min=sliderRange.value()[0];
+            temp_max=sliderRange.value()[1];}
+        else {temp_min=0; temp_max=100}    
+    
+    if (count_crime==1)
+        { crime_max=sliderFill.value();}
+        else {crime_max=1800};
+        
+    if (count_house==1)
+        {house_min=sliderRange_1.value()[0];
+            house_max=sliderRange_1.value()[1];}
+        else {house_min=0; house_max=4000}
+        
+    if (dataTemp[sliderTime.value()][d.id]>temp_min&&dataTemp[sliderTime.value()][d.id]<temp_max&&
+        dataRent[d.id]>house_min&&dataRent[d.id]<house_max&&dataRate[d.id]<crime_max) 
+  //  {return color_temp(dataTemp[sliderTime.value()][d.id]);
+        {return 1;}
+    
+    else {return 0.2};    
+    
+		 })
+        
+    .on("mouseover", function(d) {    
+    tooltip.text(dataState[d.id]+"," +dataName[d.id]+":" + dataTemp[sliderTime.value()][d.id])
+    .style("visibility", "visible")
+    .style("left", (d3.event.pageX) + "px")
+	 .style("top", (d3.event.pageY -30) + "px");    
+     });
+        
+    legend.selectAll("rect").remove();
+        
+    legend.selectAll("rect")
+  .data(temp_domain)
+  .enter()
+    .append("rect")
+    .attr("x", function(d, i){return (width-(temp_domain.length*r_w))/2+(i*r_w);})
+    .attr("y", 30)
+    .attr("height", 15)    
+    .attr("width", r_w)
+    .attr("fill", function(d) { return color_temp(d); });
+    
+    legend.selectAll("text").remove();
+    
+    legend.selectAll("text")
+  .data(temp_labels)
+  .enter()
+    .append("text")
+        .attr("x", function(d, i){return (width-(temp_domain.length*r_w))/2+(i*r_w)+5;})
+        .attr("y", 25)
+        .text(function(d, i){
+            return d;})
+        
+    };
+       
+function updateCrime(){
+//console.log('crime_data', crime_data.length)
+//filtered_set.push()
+svg.selectAll("path")
+    .style ( "fill" , function (d) {
+    if (count_temp==1)
+        {temp_min=sliderRange.value()[0];
+            temp_max=sliderRange.value()[1];}
+        else {temp_min=0; temp_max=100}    
+    
+    if (count_crime==1)
+        {crime_max=sliderFill.value();}
+        else {crime_max=1800};
+        
+    if (count_house==1)
+        {house_min=sliderRange_1.value()[0];
+            house_max=sliderRange_1.value()[1];}
+        else {house_min=0; house_max=4000};
+        
+    if (dataTemp[sliderTime.value()][d.id]>temp_min&&dataTemp[sliderTime.value()][d.id]<temp_max&&
+        dataRent[d.id]>house_min&&dataRent[d.id]<house_max&&dataRate[d.id]<crime_max) 
+    {return color_crime(dataRate[d.id]);}
+    else {return 'lightgray';}
+})
+    .style ( "opacity" , function (d) {
+    return 1;
+        })  
+    .on("mouseover", function(d) {    
+    tooltip.text(dataState[d.id]+"," +dataName[d.id]+":" + dataRate[d.id])
+    .style("visibility", "visible")
+    .style("left", (d3.event.pageX) + "px")
+	 .style("top", (d3.event.pageY -10) + "px"); });  
+    
+    legend.selectAll("rect").remove();
+    legend.selectAll("rect")
+  .data(crime_domain)
+  .enter()
+    .append("rect")
+    .attr("x", function(d, i){return (width-(crime_domain.length*r_w))/2+(i*r_w);})
+    .attr("y", 30)
+    .attr("height", 15)    
+    .attr("width", r_w)
+    .attr("fill", function(d) { return color_crime(d); });
+    
+    legend.selectAll("text").remove();
+    
+    legend.selectAll("text")
+  .data(crime_labels)
+  .enter()
+    .append("text")
+        .attr("x", function(d, i){return (width-(crime_domain.length*r_w))/2+(i*r_w)+5;})
+        .attr("y", 25)
+        .text(function(d, i){
+            return d;})    
+};
+    
+function updateHouse(){
+//console.log('crime_data', crime_data.length)
+//filtered_set.push()
+svg.selectAll("path")
+    .style ( "fill" , function (d) {
+    if (count_temp==1)
+        {temp_min=sliderRange.value()[0];
+            temp_max=sliderRange.value()[1];}
+        else {temp_min=0; temp_max=100}    
+    
+    if (count_crime==1)
+        {crime_max=sliderFill.value();}
+        else {crime_max=1800};
+        
+    if (count_house==1)
+        {house_min=sliderRange_1.value()[0];
+            house_max=sliderRange_1.value()[1];}
+        else {house_min=0; house_max=4000};
+        
+    if (dataTemp[sliderTime.value()][d.id]>temp_min&&dataTemp[sliderTime.value()][d.id]<temp_max&&
+        dataRent[d.id]>house_min&&dataRent[d.id]<house_max&&dataRate[d.id]<crime_max) 
+    {return color_rent(dataRent[d.id]) ;}
+else {return 'lightgray'};
+    
+		 })
+    .style ( "opacity" , function (d) {
+    return 1;
+})
+    .on("mouseover", function(d) {    
+    tooltip.text(dataState[d.id]+"," +dataName[d.id]+":" + dataRent[d.id])
+    .style("visibility", "visible")
+    .style("left", (d3.event.pageX) + "px")
+	 .style("top", (d3.event.pageY -10) + "px");});
+    
+    legend.selectAll("rect").remove();
+    
+    legend.selectAll("rect")
+    .data(rent_domain)
+    .enter()
+    .append("rect")
+    .attr("x", function(d, i){return (width-(rent_domain.length*r_w))/2+(i*r_w);})
+    .attr("y", 30)
+    .attr("height", 15)    
+    .attr("width", r_w)
+    .attr("fill", function(d) { return color_rent(d);});
+    
+    legend.selectAll("text").remove();
+    legend.selectAll("text")
+  .data(rent_labels)
+  .enter()
+    .append("text")
+        .attr("x", function(d, i){return (width-(rent_domain.length*r_w))/2+(i*r_w)+5;})
+        .attr("y", 25)
+        .text(function(d, i){
+            return d;})    
+
+};
+////////////////////////////////////////////////////////////////////
+    
+    
+ 
+
+
+    </script>
+    
+    </body>
+    
+</html>
