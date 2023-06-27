@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Word Cloud and Info Chart</title>
+  <style>
+     /* Styles for the container grid */
+    
+    /* Styles for the slider */
+    .container {
+      display: grid;
+      grid-template-columns: 65% 35%;
+      gap: 5px;
+      height: calc(95vh - 80px); 
+    }
+
+    /* Styles for the left column */
+    .left-column {
+      width: 100%;
+      height: 97%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Styles for the right column */
+    .right-column {
+      width: 100%;
+      height: 97%;
+      overflow: auto; /* Add scrollbar if needed */
+    }
+
+    #sub-container {
+  display: flex;  
+  border: 1px solid #189AB4;  
+  margin-bottom: 5px;
+  margin-top: 2px;
+}
+
+#selection-container {
+  width: 30%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 2px;
+
+}
+
+#search-container {
+  width: 25%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  justify-content: center;
+  align-items: center;
+  background-color: #EDF2F3;
+  padding: 4px;
+color:  #189AB4;
+font-size: 18px;
+
+}
+
+#industry-search {
+  border: 1px solid #05445E;
+}
+
+#selected-year, #selected-industry {
+  padding: 4px;
+color:  #189AB4;
+display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+#year-value, #industry-value {
+  padding: 4px;
+color:  #05445E;
+}
+
+    /* Styles for the slider */
+    #slider-container {
+        width: 45%;
+     display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #EDF2F3;
+    }
+
+        /* Styles for the word cloud */
+        #wordcloud {
+      width: 100%;
+      height: calc(97% - 260px );
+      margin-bottom: 5px;
+      display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid #189AB4;
+    }
+    
+    #chart-container {
+      height: 200px;
+      width: 100%;     
+      margin-right:2px;
+      border: 1px solid #189AB4;
+      position: relative;
+    }
+
+    #info-box{
+    color: #189AB4;
+    font-size: 18px;
+    position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+
+    }
+
+    /* Styles for the slider track */
+
+.axis text {
+  fill: #189AB4;
+}
+
+.slider text {
+  fill: #05445E;
+}
+
+/* Styles for the slider track */
+.slider .track {
+  stroke: #189AB4;
+}
+
+.slider .track-inset {
+  stroke: #189AB4;
+}
+
+    #year-label {
+      font-family: Arial, sans-serif;
+      font-size: 18px;
+      margin-top: 10px;
+    }
+
+/* Styles for the table container */
+
+#investment-table
+{
+    overflow:auto;    
+    position: relative;
+    scrollbar-width: thin;
+  scrollbar-color: #189AB4 #D4F1F4;
+}
+
+#investment-table::-webkit-scrollbar {
+  width: 10px;
+  background-color: #D4F1F4;
+  border-radius: 5px;
+}
+
+#investment-table::-webkit-scrollbar-thumb {
+  background-color: #189AB4;
+  border-radius: 5px;
+}
+
+#investment-table::-webkit-scrollbar-thumb:hover {
+  background-color: #05445E;
+}
+
+
+    #investment-table th {
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      background-color: #189AB4; /* Scallop Seashell */
+      color: #EDF2F3;
+      padding: 10px;
+      padding-right: 25px;
+      text-align: left;
+      border: none;      
+      height: 40px;
+      
+      position: sticky;
+    top: 0;
+    z-index: 1;
+    
+    }
+
+    #investment-table td {
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      color: #05445E;
+      background-color: #EDF2F3;
+      padding: 5px;
+      border: none;
+      text-overflow: ellipsis;
+		overflow: hidden;
+    }
+
+    
+
+
+    .sort-button {
+  background-color: #f2f2f2; /* Blue background */
+  border: none; /* Remove borders */
+  color: #05445E; /* White text */
+  font-size: 14px; /* Set a font size */
+ height:  16px; 
+    width: 18px;
+  cursor: pointer; /* Mouse pointer on hover */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+     position: absolute;
+  right: 3px;
+  bottom: 3px;
+}
+
+#page-header {
+  background-color: #05445E;
+  color: #D4F1F4;
+  padding: 20px;
+  text-align: left;
+  height:40px;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+  
+.modal {
+    display: none; /* Hidden by default */
+    position: absolute; /* Stay in place */
+    z-index: 9999; /* Sit on top - Higher than any Leaflet layers */
+    left: 0;
+    top: 0;
+    width: 32%; /* Full width */
+    min-height: 80px;
+    overflow: auto; /* Enable scroll if needed */
+    background-color: #EDF2F3;
+    margin: auto;
+    padding: 10px;
+    border: 1px solid #05445E;
+}
+
+/* The Close Button */
+.close {
+    color: #22223b;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+    color: #000;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+#suggestion-list {
+  position: absolute;
+  display: none;
+  background-color: #EDF2F3;
+  border: 1px solid #05445E;
+  font-size: 14px;
+  top: 165px; /* Add margin to create space between input and suggestion list */
+  left: 53.1%;
+  z-index: 1; /* Ensure the suggestion list appears above other elements */
+
+}
+.suggestion-item {
+  padding: 2px;
+  cursor: pointer;
+}
+
+.suggestion-item:hover {
+  background-color: #EDF2F3;
+}
+
+
+
+  </style>
+</head>
+<body>
+
+    <header id="page-header">
+        <h1>STARTUP INVESTMENTS 2012-2019</h1>
+      </header>
+
+    <div class="container">
+        <div class="left-column">
+            <div id="sub-container">
+                <div id="slider-container">
+                  <!-- Your slider code here -->
+                </div>
+                <div id="selection-container">
+                  <div id="selected-year" >Year: <span id="year-value">2012</span></div>
+                  <div id="selected-industry" >Industry: <span id="industry-value"></span></div>
+                </div>
+                <div id="search-container">
+                    <p style="margin-bottom:10px">Search Industry</p>
+                    <input id="industry-search" type="text" placeholder="Type to search industry" style="margin-bottom:10px; width:40%" onkeypress="handleKeyPress(event)">
+                    <div id="suggestion-list" class="suggestion-list"></div>
+                  </div>
+              </div>
+
+          <div id="wordcloud"></div>
+           <!-- Info-chart container -->
+  
+     <!-- Chart container -->
+  <div id="chart-container">
+    <div id="info-box">INFO BOX</div>
+  </div>  
+
+        </div>
+        <div class="right-column">
+            <table id="investment-table">
+              <thead>
+                <tr>
+                  <th>Company  <button class="sort-button" onclick="sort_column(0)"><i class='fas fa-sort'></i></button> </th>
+                  <th>USD Value <button class="sort-button" onclick="sort_column(1)"><i class='fas fa-sort'></i></button> </th>
+                  <th>Funding Type  <button class="sort-button" onclick="sort_column(2)"><i class='fas fa-sort'></i></button> </th>
+                  <th>Funding Status  <button class="sort-button" onclick="sort_column(3)"><i class='fas fa-sort'></i></button> </th>
+                  <th>Industry <button class="sort-button" onclick="sort_column(4)"><i class='fas fa-sort'></i></button> </th>
+                  <th>Lead Investors  <button class="sort-button" onclick="sort_column(5)"><i class='fas fa-sort'></i></button> </th>
+                  
+                </tr>
+              </thead>
+              <tbody id="investment-list"></tbody>
+            </table>
+
+                   <!-- The Modal -->
+<div id="myModal" class="modal">
+    <!-- Modal content -->
+      <span class="close">&times;</span>
+      <p id="modal-info">Some text in the Modal..</p>
+  </div>
+
+        </div>
+      </div>
+
+
+
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://unpkg.com/d3-simple-slider"></script>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="draggable.js"></script>
+  
+<!-- Load d3-cloud -->
+<script src="https://cdn.jsdelivr.net/gh/holtzy/D3-graph-gallery@master/LIB/d3.layout.cloud.js"></script>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
+
+
+
+  <script>
+
+ var whole_data;
+    var filteredData;
+    var wordCounts = {};
+    var selectedYear=2012;
+
+    
+   var wordCloudContainer = document.getElementById('wordcloud');
+   
+   var containerWidth = wordCloudContainer.offsetWidth;
+    var containerHeight = wordCloudContainer.offsetHeight;
+
+   var maxFontSize = 60;
+    var minFontSize = 6;
+
+    var industries;
+
+               // Define an array of colors for the words
+
+               // Create the word cloud SVG
+    var svg = d3.select(wordCloudContainer)
+    .append("svg")
+    .attr("width", containerWidth)
+    .attr("height", containerHeight)
+    .append("g")
+    .attr("transform", "translate(" + containerWidth / 2 + "," + containerHeight / 2 + ")")
+    .attr("willReadFrequently", true);
+
+    var colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+
+
+    
+       // Generate the slider
+       var sliderContainer = document.getElementById('slider-container');
+    var slider = d3.sliderHorizontal()
+      .min(2012)
+      .max(2019)
+      .step(1)
+      .width(sliderContainer.offsetWidth*0.6)
+      .displayValue(true)
+      .tickValues(d3.range(2012, 2020))
+      .tickFormat(d3.format("d"))
+      
+
+    d3.select(sliderContainer)
+      .append('svg')
+      .attr('width', sliderContainer.offsetWidth*0.7)
+      .attr('height', 50)
+      .style("padding", "5px")
+      .append('g')
+  .attr('transform', 'translate(10,10)')
+      .call(slider);
+
+
+    // Load data from CSV file
+    d3.csv("data.csv").then(function(data) {
+        whole_data=data;
+        industries = [...new Set(data.map(d=>d["key_industry"]))];
+
+
+      generateWordCloud(data);      
+      
+      slider.on('onchange', function(value) {
+        // Handle slider value change event
+       selectedYear = Math.round(value);
+        generateWordCloud(data);
+        showInvestments(selectedYear,'');
+
+        document.getElementById("year-value").textContent = selectedYear;
+      });
+      
+
+    });
+
+    // Generate the word cloud chart   
+    var words; 
+   function generateWordCloud(data) {
+
+    words = calculate_words(data);
+    var fontSizeScale=define_fontSizeScale(words);
+
+    var layout = d3.layout.cloud()
+          .size([containerWidth * 0.9, containerHeight ])
+          .words(words)
+          .padding(5)
+          .rotate(function() { return ~~(Math.random() * 2) * 90; })
+           .fontSize(function(d) { return fontSizeScale(d.size); })
+          .on("end", draw);
+
+        // Generate the word cloud
+        layout.start();
+
+      // Initial call to update the word cloud and show investments
+      draw(words);
+      showInvestments(selectedYear,'');
+    }
+
+
+    function calculate_words(data) {
+
+filteredData = data.filter(function(d) {
+  return d.year ===  selectedYear.toString();
+});
+
+
+filteredData.forEach(function(d) {
+  var keyIndustry = d.key_industry;
+  var usdValue = parseFloat(d.usd_value);
+
+  if (!wordCounts[keyIndustry]) {
+    wordCounts[keyIndustry] = 0;
+  }
+
+  wordCounts[keyIndustry] += usdValue;
+});
+
+var words = Object.keys(wordCounts).map(function(key) {
+  return { text: key, size: wordCounts[key] };
+});
+return words
+}
+
+function define_fontSizeScale(words)
+{
+
+        // Find the maximum and minimum values of word counts
+        var maxCount = d3.max(words, function(d) { return d.size; });
+        var minCount = d3.min(words, function(d) { return d.size; });
+
+        // Scale the font size based on the maximum and minimum values
+        var fontSizeScale = d3.scaleLinear()
+          .domain([minCount, maxCount])
+          .range([minFontSize, maxFontSize]);
+        // Configure the word cloud layout
+
+        return fontSizeScale;
+
+}
+
+function draw(words) {
+          // Remove existing word cloud SVG
+          d3.select(wordCloudContainer).select("svg").selectAll("text").remove();
+                  // Compute the maximum and minimum values for font size
+  
+             var fontSizeScale=define_fontSizeScale(words);
+
+          // Add the words as text elements
+          svg.selectAll("text")
+            .data(words)
+            .enter()
+            .append("text")
+            .style("font-size", function(d) { return fontSizeScale(d.size) })
+            .style("fill", function(d, i) { return colorScale(i % 10); })
+            .attr("text-anchor", "middle")
+            .attr("transform", function(d) {
+              return "translate(" + [d.x, d.y] + ")rotate(" + d.rotate + ")";
+            })
+            .style("cursor", "pointer")
+            .text(function(d) { return d.text; })
+            .on("click", function(event, d) {
+        console.log("industry", d.text)
+              showInvestments(selectedYear, d.text);
+              showChart(whole_data, d.text)        
+              document.getElementById("industry-value").textContent = d.text;     
+              // You can also include other actions upon click
+            })
+          
+            
+            ;
+        }
+
+
+          // Function to show the investments for a particular year and industry
+
+        var investmentList = document.getElementById('investment-list');
+        var filteredData_table;
+        var formatValue;
+
+          function showInvestments(year, industry) {
+
+            if (year!=selectedYear) {
+                console.log("year", year, industry)
+                
+                filteredData_table= whole_data.filter(function(d) {
+                    return d.key_industry === industry && d.year == year.toString(); })}
+  else
+  {
+    filteredData_table = industry ? filteredData.filter(function(d) {
+    return d.key_industry === industry;
+  }) : filteredData;
+  }
+            
+        filteredData_table.sort(function(a, b) {
+          return parseFloat(b.usd_value) - parseFloat(a.usd_value);
+        });
+
+        formatValue = d3.format(",.0f");
+
+        updateTable() 
+      }
+
+      var investmentType = {
+  "Angel": "Early-stage",
+  "Pre-Seed": "Early-stage",
+  "Seed": "Early-stage",
+  "Private Equity": "Private Equity",
+  "Series A": "Mid-stage",
+  "Series B": "Mid-stage",
+  "Series C": "Mid-stage",
+  "Series D": "Later-stage",
+  "Series E": "Later-stage",
+  "Series F": "Later-stage",
+  "Series G": "Later-stage",
+  "Series H": "Later-stage",
+  "Series I": "Later-stage",
+  "Series J": "Later-stage"
+};
+
+/////////////////////////////Build chart
+
+var  filteredData_chart;
+var chartContainer = document.getElementById("chart-container");
+var bar_margin = { top: 20, right: 20, bottom: 50, left: 50 };
+var bar_width = chartContainer.offsetWidth - bar_margin.left - bar_margin.right;
+var bar_height = 200 - bar_margin.top - bar_margin.bottom;
+     
+     // Create the SVG container
+var chart_svg = d3.select("#chart-container") 
+ .append("svg")
+ .attr("width", bar_width + bar_margin.left + bar_margin.right)
+ .attr("height", bar_height + bar_margin.top + bar_margin.bottom)
+ .append("g")
+ .attr("transform", "translate(" + bar_margin.left + "," + bar_margin.top + ")")
+
+
+var funding_types=["Early-stage", "Mid-stage", "Later-stage", "Private Equity"];
+
+ // Set up the color scale for funding types
+var bar_colorScale = d3.scaleOrdinal()
+  .domain(funding_types).range(['#B1D4E0', '#2E8BC0', '#145DA0', '#0C2D48']);
+
+
+// Create a separate SVG group for the legend
+var legend = chart_svg.append("g")
+  .attr("class", "legend")
+  .attr("transform", "translate(0," + (bar_height + 30) + ")")
+ .style("display", "none")
+
+
+// Create the legend items
+var legendItems = legend.selectAll(".legend-item")
+  .data(funding_types)
+  .enter()
+  .append("g")
+  .attr("class", "legend-item")
+  .attr("transform", function(d, i) { return "translate(" + (i * 100) + ", 0)"; }); // Adjust the spacing between legend items
+
+// Add colored rectangles as legend markers
+legendItems.append("rect")
+  .attr("width", 15)
+  .attr("height", 15)
+  .attr("fill", bar_colorScale);
+
+// Add text labels for the legend items
+legendItems.append("text")
+  .attr("x", 20)
+  .attr("y", 12)
+  .text(function(d) { return d; });
+
+// Style the legend items as needed (font size, color, etc.)
+legend.selectAll("text")
+  .style("font-size", "12px")
+  .style("fill", "#555555");
+
+
+
+ function showChart(data, industry)  
+      {
+        chartContainer.style.display = "block";
+        chart_svg.select(".legend").style("display", "block");
+
+        // Select the info box element and change its display style property
+        document.getElementById("info-box").style.display = "none";
+   
+
+filteredData_chart = data.filter(d=>d.key_industry==industry)
+
+     // Group the data by years and funding_type
+var nestedData = Array.from(d3.group(filteredData_chart, d => d.year), ([year, values]) => {
+  var fundingTypeValues = Array.from(d3.group(values, d =>investmentType[d.funding_type]), ([fundingType, fundingTypeValues]) => {
+    var sum = d3.sum(fundingTypeValues, d => +d.usd_value);
+    return { funding_type: fundingType, value: sum };
+  });
+  return { year: year, values: fundingTypeValues };
+});
+
+///sort the years and do not include 2020
+nestedData=nestedData.sort(function(a, b) {
+    return d3.ascending(+a.year, +b.year);
+  })
+  .filter(function(d) {
+    return +d.year <= 2019;
+  });
+
+  // Create a custom sorting function
+var stackOrderSort = function(a, b) {
+  return funding_types.indexOf(b) - funding_types.indexOf(a);
+};
+
+// Sort the stack keys
+nestedData.forEach(function(d) {
+  d.values.sort(function(a, b) {
+    return stackOrderSort(a.funding_type, b.funding_type);
+  });
+});
+// Set up the dimensions of the chart
+
+// Set up the x and y scales
+var xScale = d3.scaleBand()
+  .domain(nestedData.map(function(d) { return d.year; }))
+  .range([0, bar_width])
+  .padding(0.1);
+
+var yScale = d3.scaleLinear()
+  .domain([0, d3.max(nestedData, function(d) { return d3.max(d.values, function(d) { return d.value; }); })])
+  .range([bar_height, 0]);
+
+  ////remove the old bars and axis
+
+  chart_svg.selectAll(".year-group").remove();
+  chart_svg.select(".y-axis").remove();
+  chart_svg.select(".x-axis").remove();
+// Create the stacked bars
+var yearGroups = chart_svg.selectAll(".year-group")
+  .data(nestedData)
+  .enter()
+  .append("g")
+  .attr("class", "year-group")
+  .attr("transform", function(d) { return "translate(" + xScale(d.year) + ", 0)"; });
+
+yearGroups.selectAll("rect")
+  .data(function(d) { return d.values; })
+  .enter()
+  .append("rect")
+  .attr("x", 0)
+  .attr("y", function(d) { return yScale(d.value); })
+  .attr("width", xScale.bandwidth())
+  .attr("height", function(d) { return bar_height - yScale(d.value); })
+  .attr("fill", function(d) { return bar_colorScale(d.funding_type); })
+  .style("cursor", "pointer")
+  .on("click", function(d, i) {
+  var year = d3.select(this.parentNode).datum().year;
+  showInvestments(year, industry);
+});
+
+// Add x-axis
+chart_svg.append("g")
+  .attr("class", "x-axis")
+  .attr("transform", "translate(0," + bar_height + ")")
+  .call(d3.axisBottom(xScale));
+
+// Add y-axis
+chart_svg.append("g")
+  .attr("class", "y-axis")
+  .call(d3.axisLeft(yScale) .tickFormat(d3.format(".2s")));
+      }
+
+/////////sort buttons
+
+var sortAscending= true;
+var keys = ['company', 'usd_value', 'funding_type', 'funding_status', 'industry', 'lead_investors'];
+
+function sort_column(i) {
+
+  if (sortAscending) {
+    filteredData_table.sort(function(a, b) {
+        return b[keys[i]] - a[keys[i]]; 
+    });
+    sortAscending = false;
+  } else {
+    filteredData_table.sort(function(a, b) {
+        return a[keys[i]] - b[keys[i]]; 
+    });
+    sortAscending = true;
+  }
+
+  // Update the table with the sorted data
+  updateTable();
+}
+
+function updateTable() {
+  var tableHTML = filteredData_table.map(function(d) {
+    return `
+      <tr>
+        <td class="company-cell" data-descrip="${d.descrip}">${d.company}</td>
+        <td>${formatValue(+d.usd_value)}</td>
+        <td>${d.funding_type}</td>
+        <td>${d.funding_status}</td>
+        <td>${d.industry}</td>
+        <td>${d.lead_investors}</td>
+       
+      </tr>
+    `;
+  }).join('');
+
+  investmentList.innerHTML = tableHTML;
+
+// Add cursor:pointer to company cells and attach click event listener
+var companyCells = document.querySelectorAll('.company-cell');
+  companyCells.forEach(function(cell) {
+    cell.style.cursor = 'pointer';
+    cell.addEventListener('click', function() {
+        var descrip = this.getAttribute('data-descrip');
+      showPopup(descrip, this.getBoundingClientRect());
+      console.log("rect", this.getBoundingClientRect())
+    });
+  });
+}
+
+var modal = document.getElementById("myModal");
+var span = document.getElementsByClassName("close")[0];
+
+function showPopup(text, rect) {
+
+    document.getElementById("modal-info").innerHTML = text;
+
+        // Open the modal
+        modal.style.display = "block";
+        modal.style.overflowY = "auto";  // add this line for scrollbar
+        modal.style.maxHeight = (rect.height * 0.6) + "px"; 
+
+        modal.style.left = rect.left + 5 + "px";
+
+        // calculate the bottom of mapid, assume it starts at 'rect.top' and has height 'rect.height'
+        // let intendedTopPosition = rect.y+"px";
+        // intendedTopPosition = intendedTopPosition > rect.top + rect.height * 0.6? rect.top + rect.height * 0.6 : intendedTopPosition
+       
+        modal.style.top = rect.y+"px";
+
+        // stop the propagation of the click event
+        event.stopPropagation();
+
+        // When the user clicks on <span> (x), close the modal
+        span.onclick = function() {
+            modal.style.display = "none";
+        }
+        
+    };
+   
+     // When the user clicks anywhere outside of the modal, close it
+     window.onclick = function(event) {
+        if (!modal.contains(event.target)) {
+            modal.style.display = "none";
+        }
+    }
+
+
+// Get the search input element
+var searchInput = document.getElementById('industry-search');
+
+// Get the suggestion list element
+var suggestionList = document.getElementById('suggestion-list');
+
+
+
+// Add an event listener for input changes
+searchInput.addEventListener('input', function() {
+  var searchValue = this.value.toLowerCase();
+
+  // Filter the industries based on the search input
+  var filteredIndustries = industries.filter(function(x) {
+    return x.toLowerCase().startsWith(searchValue);
+  });
+
+  // Display the filtered industries as suggestions in the dropdown list
+  // Generate the HTML for the suggestion items
+  suggestionList.innerHTML =filteredIndustries
+    .map(function(industry) {
+      return `<div class="suggestion-item" onclick="handleSearchClick('${industry}')">${industry}</div>`;
+    })
+    .join('');
+
+  // Show or hide the suggestion list based on the input value
+  if (filteredIndustries.length > 0) {
+    suggestionList.style.display = 'block';
+  } else {
+    suggestionList.style.display = 'none';
+  }
+});
+
+// Function to handle the search click event
+
+function handleKeyPress(event) {
+  if (event.key === 'Enter') {
+    // Handle search when Enter key is pressed
+    var searchValue  = searchInput.value;
+    searchValue = capitalizeString(searchValue)
+    handleSearchClick(searchValue);
+  }
+}
+
+function handleSearchClick(searchValue) {
+    document.getElementById('suggestion-list').innerHTML = ''; // Clear suggestion list on click
+
+  document.getElementById('industry-value').textContent = searchValue;
+  showInvestments(selectedYear, searchValue);
+  showChart(whole_data, searchValue);
+}
+
+
+function capitalizeString(str) {
+  return str.split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+
+  </script>
+</body>
+</html>

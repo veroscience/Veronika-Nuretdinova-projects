@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Global Terrorism Map</title>
+    <!-- Don't forget to link to your CSS and JavaScript files here -->
+    <!-- Link to your CSS file -->
+    <link rel="stylesheet" type="text/css" href="styles.css">
+    <!-- Link to D3.js v5 library -->
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+   
+    <!-- Link to Leaflet library -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A==" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA==" crossorigin=""></script>
+
+    <!-- Link to Font Awesome-->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css">
+       <!-- Link to Topojson library -->
+    <script src="https://unpkg.com/topojson@3"></script>
+
+     <!-- Link to Slider library -->
+<script src="https://unpkg.com/d3-simple-slider"></script>
+
+ <!-- Link to Canvas -->
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.3.3/html2canvas.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/canvg/1.5/canvg.min.js"></script>
+
+</head>
+
+<body>
+    <nav class="navbar">        
+        <div class="nav-title">Global Terrorism 1970-2021</div>
+                <!-- Add menu items here -->
+                <div class="nav-links">
+                <a href="index.html">Map</a>
+                <a href="analysis.html">Analysis</a>
+                <a href="sources.html">Data Sources</a>
+                <a href="https://github.com/Nikotino/Veronika-Nuretdinova-projects/tree/master" target="_blank"> <i class="fab fa-github"></i></a>
+                <a href="mailto:veronika@nuretdinova.com"><i class="far fa-envelope"></i></a>
+            </div>
+    </nav>
+
+
+    <div class="container">
+        <div class="column" style="width: 15%;">
+            <div id="dropdown-section" class="section">
+              
+                <div class="header">
+                    <h4>Bubble Color</h4>
+                  </div>
+                  <div class="section-content">
+                <div class="dropdown" id="bubble_color">
+                    <!-- Dropdown content here -->
+                </div>
+                <div class="legend" id="legend">
+                    <!-- Legend content here -->
+                </div>
+            </div>
+        </div>
+            <div id="slider-section" class="section">
+                <div class="header">
+                    <h4>Bubble Size and Label</h4>
+                  </div>
+                  <div class="section-content">
+                <div id="bubbleSizeSlider" style="height:70px">
+                    <!-- Bubble size slider content here -->
+                </div>
+                <button id="equalsize" style="margin-top:15px">Same size</button>
+                <br>
+                <div class="dropdown" id="bubble_label" style="justify-content: left;">
+                    <!-- Dropdown content here -->
+                </div>
+               
+            </div>
+        </div>
+
+        <div class="section" id="filter-section">
+            <div class="header">
+                <h4>Show Biggest Attacks</h4>
+            </div>
+            <div class="section-content">
+                <div id="bubbleFilterSlider"  style="height:70px"></div>
+                <button id="showAll" style="margin-top:15px">Show All</button>
+            </div>
+        </div>
+    </div>
+
+        <div class="column" style="flex: 80%;">
+            <div class="row">
+          <button id="resetZoom" style="position:absolute;margin-top:10px;margin-left:10px;" title="Reset Zoom">
+            <i class="fas fa-search-minus"></i> Reset Zoom
+        </button>
+        <button id="saveButton" style="position:absolute;margin-top:10px; right:3%;">Save Image</button>
+
+        <div id="loadingSpinner" style="display: none; position: absolute; z-index: 10; left: 50%; top:40%">
+            <img src="icons/spinner.gif" alt="Loading..." style="width: 100px; " />
+        </div>
+
+            <div id="map_id" class="world-map" >
+                <!-- Include your world map here. Depending on your method, it may involve embedding, using an image, or using a library. -->
+            </div>
+        </div>
+        <div class="slider-info">
+             <p style="width:160px; margin-top:22px">
+                <button id="yearLabel" style="cursor:pointer; font-size: 16px; font-family: Arial;">Year:</button>
+                <span id="yearDisplay" style="display:inline-block" >1970</span>
+              </p>
+            <div id="yearSlider" style="width:80%">
+        </div>
+
+        <!-- The Modal -->
+
+        </div> 
+        <!-- end of main column -->
+
+       <!-- The Modal -->
+<div id="myModal" class="modal">
+    <!-- Modal content -->
+      <span class="close">&times;</span>
+      <p id="modal-info">Some text in the Modal..</p>
+  </div>
+       
+        </div>
+    </div>
+</body>
+
+<script src="world_map.js"></script>
+<script src="data.js"></script>
+<script src="elements.js"></script>
+<script src="draggable.js"></script>
+<script src="save_image.js"></script>
+</html>
+
